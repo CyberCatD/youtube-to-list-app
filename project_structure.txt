@@ -1,0 +1,27 @@
+
+mkdir youtube_to_list
+cd youtube_to_list
+mkdir src
+mkdir src/services
+mkdir src/api
+mkdir src/api/v1
+mkdir src/api/v1/endpoints
+mkdir cli
+mkdir docs
+touch requirements.txt
+touch .env
+touch README.md
+touch src/main.py
+touch src/config.py
+touch src/database.py
+touch src/models.py
+touch src/schemas.py
+touch src/services/__init__.py
+touch src/services/youtube_service.py
+touch src/services/llm_service.py
+touch src/services/card_service.py
+touch src/api/v1/endpoints/youtube.py
+touch src/api/v1/endpoints/cards.py
+touch cli/__init__.py
+touch cli/client.py
+touch docs/api.md
