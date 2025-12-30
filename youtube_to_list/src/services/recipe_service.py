@@ -4,11 +4,12 @@ from src.schemas import VideoMetadataSchema
 from src.services import youtube_service, llm_service
 from datetime import datetime
 
-def create_recipe_from_youtube_url(db: Session, youtube_url: str) -> Recipe:
+def upsert_recipe_from_youtube_url(db: Session, youtube_url: str) -> Recipe:
     """
-    Processes a YouTube URL to create a new, structured Recipe entry in the database.
+    Processes a YouTube URL to create or update a structured Recipe entry in the database.
+    If a recipe with the given source_url already exists, it updates it.
     """
-    print("--- DEBUG: Starting recipe creation ---")
+    print("--- DEBUG: Starting recipe upsert ---")
     try:
         video_id = youtube_service.extract_video_id(youtube_url)
         print(f"--- DEBUG: Extracted video_id: {video_id} ---")
@@ -33,21 +34,50 @@ def create_recipe_from_youtube_url(db: Session, youtube_url: str) -> Recipe:
         print("--- DEBUG: Received data from LLM ---")
 
         recipe_details = llm_output.get("recipe_details", {})
-        db_recipe = Recipe(
-            name=recipe_details.get("name", metadata.title),
-            source_url=youtube_url,
-            prep_time=recipe_details.get("prep_time"),
-            cook_time=recipe_details.get("cook_time"),
-            total_time=recipe_details.get("total_time"),
-            servings=recipe_details.get("servings"),
-            category=recipe_details.get("category"),
-            cuisine=recipe_details.get("cuisine"),
-            calories=recipe_details.get("calories"),
-            card_color=llm_output.get("card_color", "#EAEAEA"),
-        )
-        db.add(db_recipe)
-        print("--- DEBUG: Created Recipe object in session ---")
         
+        # Check if recipe already exists
+        db_recipe = db.query(Recipe).filter(Recipe.source_url == youtube_url).first()
+
+        if db_recipe:
+            print(f"--- DEBUG: Updating existing recipe ID: {db_recipe.id} ---")
+            # Update existing recipe details
+            db_recipe.name = recipe_details.get("name", metadata.title)
+            db_recipe.prep_time = recipe_details.get("prep_time")
+            db_recipe.cook_time = recipe_details.get("cook_time")
+            db_recipe.total_time = recipe_details.get("total_time")
+            db_recipe.servings = recipe_details.get("servings")
+            db_recipe.category = recipe_details.get("category")
+            db_recipe.cuisine = recipe_details.get("cuisine")
+            db_recipe.calories = recipe_details.get("calories")
+            db_recipe.main_image_url = llm_output.get("main_image_url", metadata.thumbnail_url)
+            # db_recipe.card_color is removed
+            
+            # Clear existing ingredients and instructions for a full update
+            db_recipe.ingredients.clear()
+            db_recipe.instructions.clear()
+            db.flush() # Ensure old associations are cleared
+
+        else:
+            print("--- DEBUG: Creating new recipe ---")
+            db_recipe = Recipe(
+                name=recipe_details.get("name", metadata.title),
+                source_url=youtube_url,
+                prep_time=recipe_details.get("prep_time"),
+                cook_time=recipe_details.get("cook_time"),
+                total_time=recipe_details.get("total_time"),
+                servings=recipe_details.get("servings"),
+                category=recipe_details.get("category"),
+                cuisine=recipe_details.get("cuisine"),
+                calories=recipe_details.get("calories"),
+                main_image_url=llm_output.get("main_image_url", metadata.thumbnail_url),
+            )
+            db.add(db_recipe)
+        
+        # Flush the session to ensure db_recipe has an ID before processing relationships
+        db.flush()
+        db.refresh(db_recipe) # Refresh to ensure ID is available for new recipes
+
+        # Process Ingredients by leveraging the SQLAlchemy relationship
         ingredients_data = llm_output.get("ingredients", [])
         print(f"--- DEBUG: Processing {len(ingredients_data)} ingredients ---")
         for item in ingredients_data:
@@ -55,20 +85,15 @@ def create_recipe_from_youtube_url(db: Session, youtube_url: str) -> Recipe:
             if not ingredient_name:
                 continue
             
-            # Check if ingredient is already in the DB
+            # Find existing ingredient or create a new one in the current session
             db_ingredient = db.query(Ingredient).filter(Ingredient.name.ilike(ingredient_name)).first()
-            
-            # If not in DB, check if it's already been added in this session
-            if not db_ingredient:
-                # This is a simple, in-memory check for the current transaction
-                session_ingredients = [ing for ing in db.new if isinstance(ing, Ingredient)]
-                db_ingredient = next((ing for ing in session_ingredients if ing.name.lower() == ingredient_name.lower()), None)
-
             if not db_ingredient:
                 db_ingredient = Ingredient(name=ingredient_name)
                 db.add(db_ingredient)
+                db.flush() # Ensure new ingredient gets an ID if it's created
                 print(f"--- DEBUG: Creating new ingredient: {ingredient_name} ---")
             
+            # Create the association object and append it to the recipe's ingredient list
             recipe_ingredient = RecipeIngredient(
                 ingredient=db_ingredient,
                 quantity=item.get("quantity"),
@@ -78,6 +103,7 @@ def create_recipe_from_youtube_url(db: Session, youtube_url: str) -> Recipe:
             db_recipe.ingredients.append(recipe_ingredient)
         print("--- DEBUG: Finished processing ingredients ---")
 
+        # Process Instructions by leveraging the SQLAlchemy relationship
         instructions_data = llm_output.get("instructions", [])
         print(f"--- DEBUG: Processing {len(instructions_data)} instructions ---")
         for item in instructions_data:
@@ -90,10 +116,10 @@ def create_recipe_from_youtube_url(db: Session, youtube_url: str) -> Recipe:
         print("--- DEBUG: Finished processing instructions ---")
             
         print("--- DEBUG: Committing transaction to database ---")
-        db.commit()
+        db.commit() # Commit everything at once at the end
         print("--- DEBUG: Commit successful ---")
         
-        db.refresh(db_recipe)
+        db.refresh(db_recipe) # Refresh after commit to load all relationships
         print("--- DEBUG: Recipe object refreshed from DB ---")
         
         return db_recipe

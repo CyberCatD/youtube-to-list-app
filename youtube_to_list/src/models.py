@@ -18,8 +18,7 @@ class Recipe(Base):
     category = Column(String, nullable=True)
     cuisine = Column(String, nullable=True)
     calories = Column(Integer, nullable=True)
-    
-    card_color = Column(String, nullable=True)
+    main_image_url = Column(String, nullable=True) # New field for the main recipe image
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

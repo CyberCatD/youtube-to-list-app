@@ -64,7 +64,7 @@ const convertUnits = (quantity: number | null, unit: string | null, toMetric: bo
           convertedUnit = 'cups';
         } else if (quantity >= 14) { // ~1 tbsp
           convertedQuantity = quantity / 14.79;
-          convertedUnit = 'tbsp';
+          convertedUnit = 'tablespoons';
         } else if (quantity >= 4) { // ~1 tsp
           convertedQuantity = quantity / 4.929;
           convertedUnit = 'tsp';
@@ -104,7 +104,8 @@ const RecipeDetail = () => {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isMetric, setIsMetric] = useState(false); // New state for unit system
+  const [isMetric, setIsMetric] = useState(false);
+  const [imageError, setImageError] = useState(false); // Correctly define imageError state
 
   useEffect(() => {
     if (!id) return;
@@ -129,47 +130,61 @@ const RecipeDetail = () => {
   if (!recipe) return <p className="text-center text-gray-500">Recipe not found.</p>;
 
   return (
-    <Card className="mx-auto p-4 md:p-8 shadow-lg" style={{ backgroundColor: recipe.card_color || '#EAEAEA' }}>
-      <CardHeader className="mb-6">
-        <CardTitle className="text-4xl font-bold text-gray-800 mb-2">{recipe.name}</CardTitle>
-        <CardDescription className="flex flex-wrap gap-2 mb-4">
-          {recipe.category && <Badge variant="secondary">{recipe.category}</Badge>}
-          {recipe.cuisine && <Badge variant="secondary">{recipe.cuisine}</Badge>}
-          {recipe.servings && <Badge variant="outline">Serves: {recipe.servings}</Badge>}
-        </CardDescription>
-        <div className="flex flex-wrap gap-4 text-gray-700 text-lg">
-            {recipe.prep_time && <p><strong>Prep:</strong> {recipe.prep_time}</p>}
-            {recipe.cook_time && <p><strong>Cook:</strong> {recipe.cook_time}</p>}
-            {recipe.total_time && <p><strong>Total:</strong> {recipe.total_time}</p>}
-            {recipe.calories && <p><strong>Calories:</strong> {recipe.calories}</p>}
+    <Card className="mx-auto p-4 md:p-8 shadow-lg max-w-4xl" style={{ backgroundColor: 'white' }}>
+      {recipe.main_image_url && !imageError ? (
+        <img
+          src={recipe.main_image_url}
+          alt={recipe.name}
+          className="w-full h-64 object-cover rounded-t-lg mb-6"
+          onError={() => {
+            console.error(`Failed to load image: ${recipe?.main_image_url}`);
+            setImageError(true);
+          }}
+        />
+      ) : (recipe.main_image_url && imageError) ? (
+        <div className="w-full h-64 flex items-center justify-center bg-gray-200 text-gray-500 rounded-t-lg mb-6">
+          Image not available
+        </div>
+      ) : null}
+      <CardHeader className="pb-4">
+        <CardTitle className="text-4xl font-extrabold text-gray-900 mb-2 leading-tight">{recipe.name}</CardTitle>
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          {recipe.category && <Badge variant="secondary" className="text-md px-3 py-1">{recipe.category}</Badge>}
+          {recipe.cuisine && <Badge variant="secondary" className="text-md px-3 py-1">{recipe.cuisine}</Badge>}
+          {recipe.servings && <Badge variant="outline" className="text-md px-3 py-1">Serves: {recipe.servings}</Badge>}
+          <div className="flex items-center space-x-2 ml-auto">
+            <Switch
+              id="unit-toggle"
+              checked={isMetric}
+              onCheckedChange={setIsMetric}
+            />
+            <Label htmlFor="unit-toggle" className="text-md font-medium">{isMetric ? 'Metric' : 'Imperial'}</Label>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-gray-700 text-base border-t pt-4 mt-4">
+            {recipe.prep_time && <p><strong className="font-semibold">Prep:</strong> {recipe.prep_time}</p>}
+            {recipe.cook_time && <p><strong className="font-semibold">Cook:</strong> {recipe.cook_time}</p>}
+            {recipe.total_time && <p><strong className="font-semibold">Total:</strong> {recipe.total_time}</p>}
+            {recipe.calories && <p><strong className="font-semibold">Calories:</strong> {recipe.calories}</p>}
         </div>
       </CardHeader>
 
-      <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6">
         {/* Ingredients Column */}
         <div className="md:col-span-1">
-          <div className="flex items-center justify-between mb-4 border-b pb-2">
-            <h2 className="text-2xl font-semibold">Ingredients</h2>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="unit-toggle"
-                checked={isMetric}
-                onCheckedChange={setIsMetric}
-              />
-              <Label htmlFor="unit-toggle">{isMetric ? 'Metric' : 'Imperial'}</Label>
-            </div>
-          </div>
-          <ul className="space-y-3">
+          <h2 className="text-2xl font-bold mb-4 border-b pb-2 text-gray-800">Ingredients</h2>
+          <ul className="space-y-4 text-gray-800 text-lg">
             {recipe.ingredients.map((item, index) => {
               const { quantity, unit } = convertUnits(item.quantity, item.unit, isMetric);
               return (
-                <li key={index} className="grid grid-cols-3 gap-2 items-start text-gray-800">
-                  <div className="font-semibold col-span-1">
+                <li key={index} className="grid grid-cols-3 gap-2 items-baseline">
+                  <div className="font-bold col-span-1">
                     {quantity} {unit}
                   </div>
                   <div className="col-span-2">
                     {item.ingredient.name}
-                    {item.notes && <span className="text-gray-500 text-sm block">{item.notes}</span>}
+                    {item.notes && <span className="text-gray-600 text-sm block">({item.notes})</span>}
                   </div>
                 </li>
               );
@@ -179,8 +194,8 @@ const RecipeDetail = () => {
 
         {/* Instructions Column */}
         <div className="md:col-span-2">
-          <h2 className="text-2xl font-semibold mb-4 border-b pb-2">Instructions</h2>
-          <div className="space-y-4 text-gray-800">
+          <h2 className="text-2xl font-bold mb-4 border-b pb-2 text-gray-800">Instructions</h2>
+          <div className="space-y-6 text-gray-800 text-lg">
             {(() => {
               let currentSection = "";
               return recipe.instructions.map((step) => {
@@ -190,10 +205,10 @@ const RecipeDetail = () => {
                 }
                 return (
                   <div key={step.step_number}>
-                    {showSection && <h3 className="text-xl font-semibold mt-6 mb-2 border-b">{currentSection}</h3>}
+                    {showSection && <h3 className="text-xl font-bold mt-8 mb-3 border-b pb-1 text-gray-800">{currentSection}</h3>}
                     <div className="flex items-start">
-                      <span className="font-bold text-lg mr-4 text-blue-500">{step.step_number}.</span>
-                      <p>{step.description}</p>
+                      <span className="font-bold text-lg mr-4 text-blue-600">{step.step_number}.</span>
+                      <p className="flex-1">{step.description}</p>
                     </div>
                   </div>
                 );
@@ -202,8 +217,8 @@ const RecipeDetail = () => {
           </div>
         </div>
       </CardContent>
-       <div className="mt-8 text-center">
-          <Link to={recipe.source_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700">
+       <div className="mt-10 text-center border-t pt-6">
+          <Link to={recipe.source_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-lg font-medium">
             Watch the original video on YouTube
           </Link>
         </div>

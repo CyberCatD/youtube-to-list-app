@@ -16,7 +16,7 @@ def process_youtube_url(
     Processes a YouTube URL to create a new, structured recipe.
     """
     try:
-        created_recipe = recipe_service.create_recipe_from_youtube_url(db, request.youtube_url)
+        created_recipe = recipe_service.upsert_recipe_from_youtube_url(db, request.youtube_url)
         return YouTubeProcessResponseSchema(
             message="Recipe created successfully.",
             recipe_id=created_recipe.id,

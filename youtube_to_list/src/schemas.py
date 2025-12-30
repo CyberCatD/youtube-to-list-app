@@ -48,7 +48,7 @@ class RecipeSchema(BaseModel):
     category: Optional[str] = None
     cuisine: Optional[str] = None
     calories: Optional[int] = None
-    card_color: Optional[str] = None
+    main_image_url: Optional[str] = None # New field for main recipe image
     created_at: datetime
     
     ingredients: List[RecipeIngredientSchema] = []

@@ -57,7 +57,7 @@ const RecipeGallery = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {recipes.map((recipe) => (
             <Link to={`/recipe/${recipe.id}`} key={recipe.id} className="block">
-              <Card className="hover:shadow-xl transition-shadow duration-300" style={{ backgroundColor: recipe.card_color || '#EAEAEA' }}>
+              <Card className="hover:shadow-xl transition-shadow duration-300">
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold text-gray-800">{recipe.name}</CardTitle>
                 </CardHeader>

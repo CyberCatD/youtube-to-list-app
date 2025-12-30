@@ -74,18 +74,21 @@ def generate_content_and_tags(
       "tags": {{
         "macro": [],
         "topic": [],
+      "tags": {{
+        "macro": [],
+        "topic": [],
         "content": []
       }},
-      "card_color": "string"
+      "main_image_url": "string (URL for the main dish image, fallback to thumbnail)"
     }}
     ```
 
     **DETAILED INSTRUCTIONS:**
 
     -   **`recipe_details`**: Fill this with the overall information about the recipe. Convert all times to ISO 8601 duration format.
+    -   **`main_image_url`**: Find an image URL that best represents the final dish. Prioritize images explicitly linked or clearly described as the \"final dish image\" in the description or comments. If no such image is clearly identified, **ALWAYS use the video thumbnail URL from `metadata.thumbnail_url` as the fallback.** Do not attempt to guess or find other images.
     -   **`ingredients`**: Create a list of all ingredients. Each ingredient must be an object with `name`, `quantity`, `unit`, and optional `notes`. Be as precise as possible.
     -   **`instructions`**: Create a list of all steps. Each step must be a separate object with a `step_number`, an optional `section_name`, and a `description` of the action.
-    -   **`card_color`**: Choose a color from the provided list based on the recipe's category.
 
     **COLOR PALETTE:**
     -   `#FFADAD` (Red/Pink)

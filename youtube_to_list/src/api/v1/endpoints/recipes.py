@@ -33,9 +33,10 @@ def list_recipes(
     """
     try:
         recipes = recipe_service.get_all_recipes(db)
-        print(f"--- DEBUG: BACKEND DATA ---")
-        print(recipes)
-        print(f"--------------------------")
+        print(f"--- DEBUG: Backend recipes data for UI ---")
+        for recipe in recipes:
+            print(f"  Recipe ID: {recipe.id}, Name: {recipe.name}, Image URL: {recipe.main_image_url}")
+        print(f"------------------------------------------")
         return RecipeListResponseSchema(recipes=recipes)
     except Exception as e:
         raise HTTPException(
