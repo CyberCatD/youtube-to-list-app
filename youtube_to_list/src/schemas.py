@@ -1,31 +1,8 @@
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
-# This schema now directly reflects the flat structure of the Card SQLAlchemy model
-class CardDBSchema(BaseModel):
-    id: int
-    video_url: str
-    video_title: str
-    thumbnail_url: Optional[str] = None
-    channel_name: Optional[str] = None
-    published_date: Optional[datetime] = None
-    extracted_content_type: str
-    extracted_content_details: Dict[str, Any]
-    tags_macro: List[str] = Field(default_factory=list)
-    tags_topic: List[str] = Field(default_factory=list)
-    tags_content: List[str] = Field(default_factory=list)
-    action_steps: Optional[List[str]] = Field(default_factory=list)
-    card_color: Optional[str] = None
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-# The response model is updated to use the corrected CardDBSchema
-class CardListResponseSchema(BaseModel):
-    cards: List[CardDBSchema]
-
-# --- Schemas below are for creating/processing and remain as they were ---
+# --- Schema for passing data to the LLM ---
 
 class VideoMetadataSchema(BaseModel):
     title: str
@@ -34,28 +11,64 @@ class VideoMetadataSchema(BaseModel):
     thumbnail_url: Optional[str] = None
     channel_name: Optional[str] = None
     published_date: Optional[datetime] = None
+    comments: Optional[List[str]] = None
 
 class TagsSchema(BaseModel):
     macro: List[str] = Field(default_factory=list)
     topic: List[str] = Field(default_factory=list)
     content: List[str] = Field(default_factory=list)
 
-class CardBaseSchema(BaseModel):
-    video_metadata: VideoMetadataSchema
-    extracted_content_type: str
-    extracted_content_details: Dict[str, Any]
-    tags: TagsSchema
+# --- Schemas for reading/returning data from the API ---
 
-class CardCreateSchema(CardBaseSchema):
-    pass
+class IngredientSchema(BaseModel):
+    name: str
+    model_config = ConfigDict(from_attributes=True)
+
+class RecipeIngredientSchema(BaseModel):
+    ingredient: IngredientSchema
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    notes: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class InstructionSchema(BaseModel):
+    step_number: int
+    section_name: Optional[str] = None
+    description: str
+    model_config = ConfigDict(from_attributes=True)
+
+class RecipeSchema(BaseModel):
+    id: int
+    name: str
+    source_url: str
+    prep_time: Optional[str] = None
+    cook_time: Optional[str] = None
+    total_time: Optional[str] = None
+    servings: Optional[str] = None
+    category: Optional[str] = None
+    cuisine: Optional[str] = None
+    calories: Optional[int] = None
+    card_color: Optional[str] = None
+    created_at: datetime
+    
+    ingredients: List[RecipeIngredientSchema] = []
+    instructions: List[InstructionSchema] = []
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class RecipeListResponseSchema(BaseModel):
+    recipes: List[RecipeSchema]
+
+# --- Schemas for processing the YouTube URL ---
 
 class YouTubeProcessRequestSchema(BaseModel):
     youtube_url: str
 
 class YouTubeProcessResponseSchema(BaseModel):
     message: str
-    card_id: int
-    video_title: Optional[str] = None
+    recipe_id: int
+    recipe_name: Optional[str] = None
 
 class ErrorResponseSchema(BaseModel):
-    error: str
+    detail: str
+

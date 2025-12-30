@@ -6,6 +6,7 @@ from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, Tran
 from dateutil import parser
 
 from src.config import GOOGLE_API_KEY, YOUTUBE_API_KEY # Import YOUTUBE_API_KEY
+from typing import List
 from src.schemas import VideoMetadataSchema
 
 # YouTube Data API client initialization
@@ -13,6 +14,31 @@ from src.schemas import VideoMetadataSchema
 youtube_api_service = build(
     "youtube", "v3", developerKey=YOUTUBE_API_KEY # Use YOUTUBE_API_KEY here
 )
+
+def get_video_comments(video_id: str, max_results: int = 5) -> List[str]:
+    """
+    Fetches the top-level comments for a given video ID.
+    """
+    comments = []
+    try:
+        request = youtube_api_service.commentThreads().list(
+            part="snippet",
+            videoId=video_id,
+            maxResults=max_results,
+            order="relevance", # The API tends to return pinned comments first with this setting
+            textFormat="plainText"
+        )
+        response = request.execute()
+
+        for item in response.get("items", []):
+            comment = item["snippet"]["topLevelComment"]["snippet"]["textDisplay"]
+            comments.append(comment)
+            
+        return comments
+
+    except Exception as e:
+        print(f"Error fetching comments for {video_id}: {e}")
+        return [] # Return empty list on error, don't fail the whole process
 
 def check_transcript_availability(video_id: str) -> bool:
     """
@@ -73,7 +99,7 @@ def get_video_transcript(video_id: str, preferred_languages: list[str] = ["en", 
         # Fetch the actual transcript data
         fetched_transcript = transcript.fetch()
         
-        full_transcript = " ".join([item['text'] for item in fetched_transcript])
+        full_transcript = " ".join([item.text for item in fetched_transcript])
         return full_transcript
         
     except TranscriptsDisabled:
