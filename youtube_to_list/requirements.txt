@@ -2,6 +2,12 @@ fastapi
 uvicorn
 sqlalchemy
 python-dotenv
+python-dateutil
 google-generativeai
-youtube-transcript-api
+google-api-python-client
+youtube-transcript-api>=1.2.3
 jinja2
+slowapi
+tenacity
+cachetools
+pydantic-settings

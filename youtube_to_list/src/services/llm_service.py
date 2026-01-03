@@ -2,11 +2,13 @@ import google.generativeai as genai
 from src.config import GOOGLE_API_KEY
 from src.schemas import VideoMetadataSchema, TagsSchema
 from typing import Dict, Any, List
+import json
+import logging
 
+logger = logging.getLogger(__name__)
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
-# Model configuration
 MODEL_NAME = "gemini-2.5-flash"
 
 
@@ -74,9 +76,6 @@ def generate_content_and_tags(
       "tags": {{
         "macro": [],
         "topic": [],
-      "tags": {{
-        "macro": [],
-        "topic": [],
         "content": []
       }},
       "main_image_url": "string (URL for the main dish image, fallback to thumbnail)"
@@ -86,7 +85,7 @@ def generate_content_and_tags(
     **DETAILED INSTRUCTIONS:**
 
     -   **`recipe_details`**: Fill this with the overall information about the recipe. Convert all times to ISO 8601 duration format.
-    -   **`main_image_url`**: Find an image URL that best represents the final dish. Prioritize images explicitly linked or clearly described as the \"final dish image\" in the description or comments. If no such image is clearly identified, **ALWAYS use the video thumbnail URL from `metadata.thumbnail_url` as the fallback.** Do not attempt to guess or find other images.
+    -   **`main_image_url`**: Find an image URL that best represents the final dish. Prioritize images explicitly linked or clearly described as the "final dish image" in the description or comments. If no such image is clearly identified, **ALWAYS use the video thumbnail URL from `metadata.thumbnail_url` as the fallback.** Do not attempt to guess or find other images.
     -   **`ingredients`**: Create a list of all ingredients. Each ingredient must be an object with `name`, `quantity`, `unit`, and optional `notes`. Be as precise as possible.
     -   **`instructions`**: Create a list of all steps. Each step must be a separate object with a `step_number`, an optional `section_name`, and a `description` of the action.
 
@@ -110,18 +109,14 @@ def generate_content_and_tags(
         model = genai.GenerativeModel(MODEL_NAME)
         response = model.generate_content(prompt)
         
-        # Clean the response to ensure it's valid JSON
-        # The API sometimes returns the JSON wrapped in markdown-like backticks
         cleaned_response_text = response.text.strip().replace('```json', '').replace('```', '').strip()
         
-        # Parse the JSON response
         response_data = json.loads(cleaned_response_text)
         
         return response_data
         
     except (json.JSONDecodeError, AttributeError) as e:
-        print(f"Error parsing LLM response: {e}")
-        # Return a default structure on parsing failure to avoid breaking the calling service
+        logger.error(f"Error parsing LLM response: {e}")
         return {
             "extracted_content": {
                 "type": "General Information",
@@ -134,6 +129,5 @@ def generate_content_and_tags(
             }
         }
     except Exception as e:
-        print(f"An unexpected error occurred with the Gemini API: {e}")
+        logger.error(f"An unexpected error occurred with the Gemini API: {e}")
         raise RuntimeError("Failed to get a valid response from Gemini API.") from e
-import json

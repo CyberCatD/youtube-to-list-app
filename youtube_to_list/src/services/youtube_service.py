@@ -1,18 +1,19 @@
 import os
 from datetime import datetime
+import logging
 
 from googleapiclient.discovery import build
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
 from dateutil import parser
 
-from src.config import GOOGLE_API_KEY, YOUTUBE_API_KEY # Import YOUTUBE_API_KEY
+from src.config import GOOGLE_API_KEY, YOUTUBE_API_KEY
 from typing import List
 from src.schemas import VideoMetadataSchema
 
-# YouTube Data API client initialization
-# Note: API key should be kept secure and ideally not hardcoded
+logger = logging.getLogger(__name__)
+
 youtube_api_service = build(
-    "youtube", "v3", developerKey=YOUTUBE_API_KEY # Use YOUTUBE_API_KEY here
+    "youtube", "v3", developerKey=YOUTUBE_API_KEY
 )
 
 def get_video_comments(video_id: str, max_results: int = 5) -> List[str]:
@@ -25,7 +26,7 @@ def get_video_comments(video_id: str, max_results: int = 5) -> List[str]:
             part="snippet",
             videoId=video_id,
             maxResults=max_results,
-            order="relevance", # The API tends to return pinned comments first with this setting
+            order="relevance",
             textFormat="plainText"
         )
         response = request.execute()
@@ -37,8 +38,8 @@ def get_video_comments(video_id: str, max_results: int = 5) -> List[str]:
         return comments
 
     except Exception as e:
-        print(f"Error fetching comments for {video_id}: {e}")
-        return [] # Return empty list on error, don't fail the whole process
+        logger.error(f"Error fetching comments for {video_id}: {e}")
+        return []
 
 def check_transcript_availability(video_id: str) -> bool:
     """
@@ -53,7 +54,7 @@ def check_transcript_availability(video_id: str) -> bool:
         captions_response = captions_request.execute()
         return bool(captions_response.get("items"))
     except Exception as e:
-        print(f"An unexpected error occurred while checking transcript availability for {video_id}: {e}")
+        logger.error(f"An unexpected error occurred while checking transcript availability for {video_id}: {e}")
         return False
 
 
@@ -82,23 +83,21 @@ def get_video_metadata(video_id: str) -> VideoMetadataSchema:
         )
 
     except Exception as e:
-        print(f"Error fetching YouTube metadata for {video_id}: {e}")
+        logger.error(f"Error fetching YouTube metadata for {video_id}: {e}")
         raise
 
 
 def get_video_transcript(video_id: str, preferred_languages: list[str] = ["en", "en-US"]) -> str:
     try:
-        # Based on the inspection of the installed library (v1.2.3),
-        # we must first instantiate the class, then list and fetch.
-        api_instance = YouTubeTranscriptApi()
-        transcript_list = api_instance.list(video_id)
-
-        # Find the best transcript from the available list
+        # Updated to use new API (v1.2.3+)
+        ytt_api = YouTubeTranscriptApi()
+        transcript_list = ytt_api.list(video_id)
+        
         transcript = transcript_list.find_transcript(preferred_languages)
         
-        # Fetch the actual transcript data
         fetched_transcript = transcript.fetch()
         
+        # In v1.2.3+, items are objects with .text attribute instead of dictionaries
         full_transcript = " ".join([item.text for item in fetched_transcript])
         return full_transcript
         
@@ -107,7 +106,7 @@ def get_video_transcript(video_id: str, preferred_languages: list[str] = ["en", 
     except NoTranscriptFound:
         raise ValueError(f"No transcript found for video ID: {video_id} in preferred languages.")
     except Exception as e:
-        print(f"Error fetching transcript for {video_id}: {e}")
+        logger.error(f"Error fetching transcript for {video_id}: {e}")
         raise
 
 def extract_video_id(youtube_url: str) -> str:

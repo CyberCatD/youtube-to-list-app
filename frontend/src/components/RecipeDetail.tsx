@@ -8,6 +8,59 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
+const formatDuration = (isoDuration: string | null): string => {
+  if (!isoDuration) return '';
+  
+  const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return isoDuration;
+  
+  const hours = match[1] ? parseInt(match[1]) : 0;
+  const minutes = match[2] ? parseInt(match[2]) : 0;
+  const seconds = match[3] ? parseInt(match[3]) : 0;
+  
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} hour${hours > 1 ? 's' : ''}`);
+  if (minutes > 0) parts.push(`${minutes} minute${minutes > 1 ? 's' : ''}`);
+  if (seconds > 0 && hours === 0) parts.push(`${seconds} second${seconds > 1 ? 's' : ''}`);
+  
+  return parts.length > 0 ? parts.join(' ') : '0 minutes';
+};
+
+const formatQuantityAsFraction = (quantity: number | null): string => {
+  if (quantity === null || quantity === 0) return '??';
+  
+  const fractionMap: Record<number, string> = {
+    0.125: '1/8',
+    0.25: '1/4',
+    0.333: '1/3',
+    0.375: '3/8',
+    0.5: '1/2',
+    0.625: '5/8',
+    0.666: '2/3',
+    0.667: '2/3',
+    0.75: '3/4',
+    0.875: '7/8',
+  };
+  
+  const whole = Math.floor(quantity);
+  const decimal = Math.round((quantity - whole) * 1000) / 1000;
+  
+  if (decimal === 0) {
+    return whole.toString();
+  }
+  
+  const fraction = fractionMap[decimal];
+  if (fraction) {
+    return whole > 0 ? `${whole} ${fraction}` : fraction;
+  }
+  
+  if (quantity % 1 !== 0) {
+    return quantity.toFixed(2).replace(/\.?0+$/, '');
+  }
+  
+  return quantity.toString();
+};
+
 // Utility function for unit conversions
 const convertUnits = (quantity: number | null, unit: string | null, toMetric: boolean) => {
   if (quantity === null || unit === null) {
@@ -163,9 +216,9 @@ const RecipeDetail = () => {
         </div>
         
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-gray-700 text-base border-t pt-4 mt-4">
-            {recipe.prep_time && <p><strong className="font-semibold">Prep:</strong> {recipe.prep_time}</p>}
-            {recipe.cook_time && <p><strong className="font-semibold">Cook:</strong> {recipe.cook_time}</p>}
-            {recipe.total_time && <p><strong className="font-semibold">Total:</strong> {recipe.total_time}</p>}
+            {recipe.prep_time && <p><strong className="font-semibold">Prep:</strong> {formatDuration(recipe.prep_time)}</p>}
+            {recipe.cook_time && <p><strong className="font-semibold">Cook:</strong> {formatDuration(recipe.cook_time)}</p>}
+            {recipe.total_time && <p><strong className="font-semibold">Total:</strong> {formatDuration(recipe.total_time)}</p>}
             {recipe.calories && <p><strong className="font-semibold">Calories:</strong> {recipe.calories}</p>}
         </div>
       </CardHeader>
@@ -177,10 +230,14 @@ const RecipeDetail = () => {
           <ul className="space-y-4 text-gray-800 text-lg">
             {recipe.ingredients.map((item, index) => {
               const { quantity, unit } = convertUnits(item.quantity, item.unit, isMetric);
+              const hasQuantity = quantity !== null && quantity !== 0;
+              const hasUnit = unit !== null && unit !== '' && unit !== 'quantity not specified';
+              const formattedQty = hasQuantity ? formatQuantityAsFraction(quantity) : '??';
+              const displayUnit = hasUnit ? unit : '';
               return (
                 <li key={index} className="grid grid-cols-3 gap-2 items-baseline">
                   <div className="font-bold col-span-1">
-                    {quantity} {unit}
+                    {formattedQty} {displayUnit}
                   </div>
                   <div className="col-span-2">
                     {item.ingredient.name}
@@ -207,7 +264,7 @@ const RecipeDetail = () => {
                   <div key={step.step_number}>
                     {showSection && <h3 className="text-xl font-bold mt-8 mb-3 border-b pb-1 text-gray-800">{currentSection}</h3>}
                     <div className="flex items-start">
-                      <span className="font-bold text-lg mr-4 text-blue-600">{step.step_number}.</span>
+                      <span className={`font-bold text-lg mr-4 ${isMetric ? 'text-red-400' : 'text-blue-600'}`}>{step.step_number}.</span>
                       <p className="flex-1">{step.description}</p>
                     </div>
                   </div>
