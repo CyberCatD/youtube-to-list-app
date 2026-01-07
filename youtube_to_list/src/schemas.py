@@ -20,6 +20,12 @@ class TagsSchema(BaseModel):
 
 # --- Schemas for reading/returning data from the API ---
 
+class TagSchema(BaseModel):
+    id: int
+    name: str
+    tag_type: str
+    model_config = ConfigDict(from_attributes=True)
+
 class IngredientSchema(BaseModel):
     name: str
     model_config = ConfigDict(from_attributes=True)
@@ -41,6 +47,7 @@ class RecipeSchema(BaseModel):
     id: int
     name: str
     source_url: str
+    source_type: Optional[str] = None
     prep_time: Optional[str] = None
     cook_time: Optional[str] = None
     total_time: Optional[str] = None
@@ -48,26 +55,40 @@ class RecipeSchema(BaseModel):
     category: Optional[str] = None
     cuisine: Optional[str] = None
     calories: Optional[int] = None
-    main_image_url: Optional[str] = None # New field for main recipe image
+    main_image_url: Optional[str] = None
     created_at: datetime
     
     ingredients: List[RecipeIngredientSchema] = []
     instructions: List[InstructionSchema] = []
+    tags: List[TagSchema] = []
     
     model_config = ConfigDict(from_attributes=True)
 
 class RecipeListResponseSchema(BaseModel):
     recipes: List[RecipeSchema]
 
-# --- Schemas for processing the YouTube URL ---
+class RecipeUpdateSchema(BaseModel):
+    name: Optional[str] = None
+    main_image_url: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+# --- Schemas for processing URLs ---
 
 class YouTubeProcessRequestSchema(BaseModel):
     youtube_url: str
+
+class WebProcessRequestSchema(BaseModel):
+    url: str
+
+class UniversalProcessRequestSchema(BaseModel):
+    url: str
 
 class YouTubeProcessResponseSchema(BaseModel):
     message: str
     recipe_id: int
     recipe_name: Optional[str] = None
+    source_type: Optional[str] = None
 
 class ErrorResponseSchema(BaseModel):
     detail: str

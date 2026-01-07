@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -9,11 +10,15 @@ import logging
 
 from .api.v1.endpoints import youtube, recipes
 from .database import engine, Base
+from .scheduler import start_scheduler
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def create_tables_on_startup():
     """
@@ -35,7 +40,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(","),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE"],
+    allow_methods=["GET", "POST", "DELETE", "PATCH", "PUT"],
     allow_headers=["*"],
     max_age=3600,
 )
@@ -43,6 +48,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     create_tables_on_startup()
+    start_scheduler()
 
 @app.get("/", tags=["root"])
 def root(request: Request):
@@ -212,3 +218,5 @@ def health_check():
 
 app.include_router(youtube.router, prefix="/api/v1/youtube", tags=["youtube"])
 app.include_router(recipes.router, prefix="/api/v1/recipes", tags=["recipes"])
+
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

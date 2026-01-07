@@ -1,12 +1,13 @@
 // src/components/RecipeDetail.tsx
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import type { Recipe } from '../types';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Pencil, Check, X, Upload, RefreshCw, ImageIcon } from 'lucide-react';
 
 const formatDuration = (isoDuration: string | null): string => {
   if (!isoDuration) return '';
@@ -29,31 +30,34 @@ const formatDuration = (isoDuration: string | null): string => {
 const formatQuantityAsFraction = (quantity: number | null): string => {
   if (quantity === null || quantity === 0) return '??';
   
-  const fractionMap: Record<number, string> = {
-    0.125: '1/8',
-    0.25: '1/4',
-    0.333: '1/3',
-    0.375: '3/8',
-    0.5: '1/2',
-    0.625: '5/8',
-    0.666: '2/3',
-    0.667: '2/3',
-    0.75: '3/4',
-    0.875: '7/8',
-  };
+  const fractionMap: Array<{ value: number; display: string }> = [
+    { value: 0.125, display: '1/8' },
+    { value: 0.25, display: '1/4' },
+    { value: 0.333, display: '1/3' },
+    { value: 0.375, display: '3/8' },
+    { value: 0.5, display: '1/2' },
+    { value: 0.625, display: '5/8' },
+    { value: 0.666, display: '2/3' },
+    { value: 0.667, display: '2/3' },
+    { value: 0.75, display: '3/4' },
+    { value: 0.875, display: '7/8' },
+  ];
   
   const whole = Math.floor(quantity);
-  const decimal = Math.round((quantity - whole) * 1000) / 1000;
+  const decimal = quantity - whole;
   
-  if (decimal === 0) {
+  if (decimal < 0.001) {
     return whole.toString();
   }
   
-  const fraction = fractionMap[decimal];
-  if (fraction) {
-    return whole > 0 ? `${whole} ${fraction}` : fraction;
+  // Find matching fraction with tolerance for floating point errors
+  const matchedFraction = fractionMap.find(f => Math.abs(f.value - decimal) < 0.01);
+  
+  if (matchedFraction) {
+    return whole > 0 ? `${whole} ${matchedFraction.display}` : matchedFraction.display;
   }
   
+  // If no fraction match, show decimal rounded to 2 places
   if (quantity % 1 !== 0) {
     return quantity.toFixed(2).replace(/\.?0+$/, '');
   }
@@ -158,7 +162,116 @@ const RecipeDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isMetric, setIsMetric] = useState(false);
-  const [imageError, setImageError] = useState(false); // Correctly define imageError state
+  const [imageError, setImageError] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isFetchingImage, setIsFetchingImage] = useState(false);
+  const [nutrition, setNutrition] = useState<any>(null);
+  const [loadingNutrition, setLoadingNutrition] = useState(false);
+  const [showNutrition, setShowNutrition] = useState(false);
+
+  const fetchNutrition = async () => {
+    if (!id || nutrition) return;
+    setLoadingNutrition(true);
+    try {
+      const response = await axios.get(`/api/v1/recipes/${id}/nutrition`);
+      setNutrition(response.data);
+    } catch (err) {
+      console.error('Failed to fetch nutrition:', err);
+    } finally {
+      setLoadingNutrition(false);
+    }
+  };
+
+  const handleToggleNutrition = () => {
+    if (!showNutrition && !nutrition) {
+      fetchNutrition();
+    }
+    setShowNutrition(!showNutrition);
+  };
+
+  const handleEditName = () => {
+    if (recipe) {
+      setEditedName(recipe.name);
+      setIsEditingName(true);
+    }
+  };
+
+  const handleSaveName = async () => {
+    if (!recipe || !editedName.trim()) return;
+    
+    setIsSaving(true);
+    try {
+      const response = await axios.patch(`/api/v1/recipes/${recipe.id}`, { name: editedName.trim() });
+      setRecipe(response.data);
+      setIsEditingName(false);
+    } catch (err) {
+      console.error('Failed to update recipe name:', err);
+      alert('Failed to save recipe name');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingName(false);
+    setEditedName('');
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !recipe) return;
+    
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image must be less than 5MB');
+      return;
+    }
+    
+    setIsUploadingImage(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const response = await axios.post(`/api/v1/recipes/${recipe.id}/image`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setRecipe(response.data);
+      setImageError(false);
+    } catch (err) {
+      console.error('Failed to upload image:', err);
+      alert('Failed to upload image');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleFetchImage = async () => {
+    if (!recipe) return;
+    
+    setIsFetchingImage(true);
+    try {
+      const response = await axios.post(`/api/v1/recipes/${recipe.id}/fetch-image`);
+      if (response.data.main_image_url !== recipe.main_image_url) {
+        setRecipe(response.data);
+        setImageError(false);
+        alert('Image updated successfully!');
+      } else {
+        alert('No new image found. Try uploading your own image.');
+      }
+    } catch (err) {
+      console.error('Failed to fetch image:', err);
+      alert('Failed to fetch image');
+    } finally {
+      setIsFetchingImage(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -185,22 +298,88 @@ const RecipeDetail = () => {
   return (
     <Card className="mx-auto p-4 md:p-8 shadow-lg max-w-4xl" style={{ backgroundColor: 'white' }}>
       {recipe.main_image_url && !imageError ? (
-        <img
-          src={recipe.main_image_url}
-          alt={recipe.name}
-          className="w-full h-64 object-cover rounded-t-lg mb-6"
-          onError={() => {
-            console.error(`Failed to load image: ${recipe?.main_image_url}`);
-            setImageError(true);
-          }}
-        />
-      ) : (recipe.main_image_url && imageError) ? (
-        <div className="w-full h-64 flex items-center justify-center bg-gray-200 text-gray-500 rounded-t-lg mb-6">
-          Image not available
+        <div className="relative group">
+          <img
+            src={recipe.main_image_url}
+            alt={recipe.name}
+            className="w-full h-64 object-cover rounded-t-lg mb-6"
+            onError={() => {
+              console.error(`Failed to load image: ${recipe?.main_image_url}`);
+              setImageError(true);
+            }}
+          />
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+            <label className="p-2 bg-white/90 rounded-full shadow cursor-pointer hover:bg-white" title="Upload new image">
+              <Upload size={18} className="text-gray-600" />
+              <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={isUploadingImage} />
+            </label>
+          </div>
         </div>
-      ) : null}
+      ) : (
+        <div className="w-full h-64 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 rounded-t-lg mb-6 gap-4">
+          <ImageIcon size={48} className="text-gray-400" />
+          <p className="text-gray-500 text-sm">No image available</p>
+          <div className="flex gap-3">
+            <button
+              onClick={handleFetchImage}
+              disabled={isFetchingImage}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <RefreshCw size={16} className={isFetchingImage ? 'animate-spin' : ''} />
+              {isFetchingImage ? 'Fetching...' : 'Try to fetch image'}
+            </button>
+            <label className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+              <Upload size={16} />
+              {isUploadingImage ? 'Uploading...' : 'Upload image'}
+              <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={isUploadingImage} />
+            </label>
+          </div>
+        </div>
+      )}
       <CardHeader className="pb-4">
-        <CardTitle className="text-4xl font-extrabold text-gray-900 mb-2 leading-tight">{recipe.name}</CardTitle>
+        <div className="flex items-start gap-2 mb-2">
+          {isEditingName ? (
+            <div className="flex-1 flex items-center gap-2">
+              <input
+                type="text"
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                className="flex-1 text-3xl font-extrabold text-gray-900 border-b-2 border-blue-500 bg-transparent focus:outline-none"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveName();
+                  if (e.key === 'Escape') handleCancelEdit();
+                }}
+              />
+              <button
+                onClick={handleSaveName}
+                disabled={isSaving}
+                className="p-2 text-green-600 hover:bg-green-100 rounded-full transition-colors"
+                title="Save"
+              >
+                <Check size={24} />
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                className="p-2 text-red-600 hover:bg-red-100 rounded-full transition-colors"
+                title="Cancel"
+              >
+                <X size={24} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <CardTitle className="text-4xl font-extrabold text-gray-900 leading-tight flex-1">{recipe.name}</CardTitle>
+              <button
+                onClick={handleEditName}
+                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                title="Edit recipe name"
+              >
+                <Pencil size={20} />
+              </button>
+            </>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-3 mb-4">
           {recipe.category && <Badge variant="secondary" className="text-md px-3 py-1">{recipe.category}</Badge>}
           {recipe.cuisine && <Badge variant="secondary" className="text-md px-3 py-1">{recipe.cuisine}</Badge>}
@@ -219,8 +398,58 @@ const RecipeDetail = () => {
             {recipe.prep_time && <p><strong className="font-semibold">Prep:</strong> {formatDuration(recipe.prep_time)}</p>}
             {recipe.cook_time && <p><strong className="font-semibold">Cook:</strong> {formatDuration(recipe.cook_time)}</p>}
             {recipe.total_time && <p><strong className="font-semibold">Total:</strong> {formatDuration(recipe.total_time)}</p>}
-            {recipe.calories && <p><strong className="font-semibold">Calories:</strong> {recipe.calories}</p>}
+            {recipe.calories !== null && recipe.calories > 0 && <p><strong className="font-semibold">Calories:</strong> {recipe.calories}</p>}
         </div>
+
+        <button
+          onClick={handleToggleNutrition}
+          className="mt-4 flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium transition-colors"
+        >
+          {loadingNutrition ? 'Loading...' : showNutrition ? 'Hide Nutrition Facts' : 'Show Nutrition Facts'}
+        </button>
+
+        {showNutrition && nutrition && (
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+            <h3 className="font-bold text-lg mb-1 border-b pb-2">Nutrition Facts</h3>
+            <p className="text-sm text-gray-600 mb-1">{nutrition.servings} serving(s) per recipe</p>
+            <p className="text-sm font-semibold text-gray-700 mb-3">Amount per serving</p>
+            <div className="grid grid-cols-4 sm:grid-cols-7 gap-3 text-center">
+              <div className="p-2">
+                <p className="text-2xl font-bold text-gray-800">{Math.round(nutrition.per_serving.calories)}</p>
+                <p className="text-xs text-gray-500">Calories</p>
+              </div>
+              <div className="p-2">
+                <p className="text-2xl font-bold text-gray-800">{nutrition.per_serving.protein}g</p>
+                <p className="text-xs text-gray-500">Protein</p>
+              </div>
+              <div className="p-2">
+                <p className="text-2xl font-bold text-gray-800">{nutrition.per_serving.carbs}g</p>
+                <p className="text-xs text-gray-500">Carbs</p>
+              </div>
+              <div className="p-2">
+                <p className="text-2xl font-bold text-gray-800">{nutrition.per_serving.fat}g</p>
+                <p className="text-xs text-gray-500">Fat</p>
+              </div>
+              <div className="p-2">
+                <p className="text-2xl font-bold text-gray-800">{nutrition.per_serving.fiber}g</p>
+                <p className="text-xs text-gray-500">Fiber</p>
+              </div>
+              <div className="p-2">
+                <p className="text-2xl font-bold text-gray-800">{nutrition.per_serving.sugar}g</p>
+                <p className="text-xs text-gray-500">Sugar</p>
+              </div>
+              <div className="p-2">
+                <p className="text-2xl font-bold text-gray-800">{Math.round(nutrition.per_serving.sodium)}mg</p>
+                <p className="text-xs text-gray-500">Sodium</p>
+              </div>
+            </div>
+            {nutrition.ingredients_missing?.length > 0 && (
+              <p className="text-xs text-gray-500 mt-3">
+                * Could not find nutrition data for: {nutrition.ingredients_missing.join(', ')}
+              </p>
+            )}
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6">
@@ -230,16 +459,30 @@ const RecipeDetail = () => {
           <ul className="space-y-4 text-gray-800 text-lg">
             {recipe.ingredients.map((item, index) => {
               const { quantity, unit } = convertUnits(item.quantity, item.unit, isMetric);
-              const hasQuantity = quantity !== null && quantity !== 0;
-              const hasUnit = unit !== null && unit !== '' && unit !== 'quantity not specified';
-              const formattedQty = hasQuantity ? formatQuantityAsFraction(quantity) : '??';
-              const displayUnit = hasUnit ? unit : '';
+              const hasQuantity = quantity !== null && quantity > 0;
+              const hasUnit = unit !== null && unit !== '';
+              
+              // Determine what to display for quantity
+              let quantityDisplay = '';
+              if (hasQuantity) {
+                quantityDisplay = formatQuantityAsFraction(quantity);
+                if (hasUnit) {
+                  quantityDisplay += ' ' + unit;
+                }
+              } else if (item.notes) {
+                // If no quantity but has notes, show "as needed" or similar
+                quantityDisplay = '';
+              } else {
+                // Fallback for no quantity and no notes
+                quantityDisplay = 'to taste';
+              }
+              
               return (
-                <li key={index} className="grid grid-cols-3 gap-2 items-baseline">
-                  <div className="font-bold col-span-1">
-                    {formattedQty} {displayUnit}
+                <li key={index} className="flex gap-3 items-baseline">
+                  <div className="font-bold min-w-[100px] text-right">
+                    {quantityDisplay}
                   </div>
-                  <div className="col-span-2">
+                  <div className="flex-1">
                     {item.ingredient.name}
                     {item.notes && <span className="text-gray-600 text-sm block">({item.notes})</span>}
                   </div>
@@ -275,9 +518,14 @@ const RecipeDetail = () => {
         </div>
       </CardContent>
        <div className="mt-10 text-center border-t pt-6">
-          <Link to={recipe.source_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-lg font-medium">
-            Watch the original video on YouTube
-          </Link>
+          <a href={recipe.source_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 text-lg font-medium">
+            {recipe.source_type === 'youtube' && 'Watch the original video on YouTube'}
+            {recipe.source_type === 'instagram' && 'View the original post on Instagram'}
+            {recipe.source_type === 'tiktok' && 'Watch the original video on TikTok'}
+            {recipe.source_type === 'facebook' && 'View the original post on Facebook'}
+            {recipe.source_type === 'web' && 'View the original recipe'}
+            {!recipe.source_type && 'View the original source'}
+          </a>
         </div>
     </Card>
   );

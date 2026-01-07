@@ -19,9 +19,20 @@ def generate_content_and_tags(
     """
     Sends the transcript and video metadata to the Gemini API for content extraction and tagging.
     Returns a dictionary containing the extracted content and tags.
+    Raises ValueError if content is not a recipe/cooking video.
     """
     prompt = f"""
     You are an AI assistant tasked with transforming video content into structured, actionable data.
+    
+    **FIRST STEP - CONTENT VALIDATION:**
+    Analyze if this video is about COOKING, FOOD PREPARATION, or RECIPES. 
+    - Videos about cooking techniques, recipes, meal prep, baking, etc. → PROCEED
+    - Videos about food reviews, restaurant tours, food challenges, non-food topics → REJECT
+    
+    If this is NOT a cooking/recipe video, respond ONLY with:
+    {{"is_recipe": false, "reason": "Brief explanation of why this is not a recipe video"}}
+    
+    If this IS a cooking/recipe video, proceed with full extraction.
     
     Analyze the following YouTube video transcript and its accompanying description to extract key information.
     The video details are:
@@ -42,12 +53,18 @@ def generate_content_and_tags(
     **CRITICAL INSTRUCTIONS (GENERAL):**
     1.  Your primary goal is to extract structured data for a recipe or protocol.
     2.  Use the video description, comments, and transcript as your sources. The description and comments are the most reliable sources for specific details.
+    3.  **CRITICAL - Missing Data Handling**: When specific information is not provided in the video:
+        - For **timing** (prep_time, cook_time): Estimate based on the recipe complexity and cooking methods shown. If uncertain, use reasonable defaults (e.g., simple recipes: PT10M prep, PT15M cook).
+        - For **ingredient quantities**: If not specified, extrapolate based on the number of servings (default to 2-4 servings if not mentioned). Set quantity to 0 ONLY if it's truly "to taste" (salt, pepper, herbs).
+        - For **servings**: If not stated, estimate based on ingredient quantities (typically 2-4 servings for most recipe videos).
+    4.  Provide complete, usable data rather than leaving fields empty.
 
     **JSON OUTPUT STRUCTURE:**
     Your entire output must be a single, valid JSON object with the following structure. Do not include any text or markdown outside of this JSON.
 
     ```json
     {{
+      "is_recipe": true,
       "recipe_details": {{
         "name": "string",
         "prep_time": "string (ISO 8601 format, e.g., PT30M)",
@@ -84,9 +101,17 @@ def generate_content_and_tags(
 
     **DETAILED INSTRUCTIONS:**
 
-    -   **`recipe_details`**: Fill this with the overall information about the recipe. Convert all times to ISO 8601 duration format.
-    -   **`main_image_url`**: Find an image URL that best represents the final dish. Prioritize images explicitly linked or clearly described as the "final dish image" in the description or comments. If no such image is clearly identified, **ALWAYS use the video thumbnail URL from `metadata.thumbnail_url` as the fallback.** Do not attempt to guess or find other images.
-    -   **`ingredients`**: Create a list of all ingredients. Each ingredient must be an object with `name`, `quantity`, `unit`, and optional `notes`. Be as precise as possible.
+    -   **`recipe_details`**: Fill this with the overall information about the recipe. Convert all times to ISO 8601 duration format (e.g., PT15M for 15 minutes, PT1H30M for 1 hour 30 minutes).
+        - **`prep_time`**: Time spent on preparation (chopping, mixing, etc.) BEFORE cooking starts. Look for phrases like "prep time", "preparation", "mise en place" in the video. **If not stated, estimate based on recipe complexity** (simple: PT5M-PT10M, complex: PT20M-PT30M).
+        - **`cook_time`**: Active cooking time (time on stove, in oven, etc.). Look for "cook time", "cooking", "baking time". **If not stated, estimate based on cooking methods shown** (sautéing: PT10M-PT15M, baking: PT30M-PT45M).
+        - **`total_time`**: Sum of prep_time and cook_time. Calculate even if individual times are estimated.
+        - **`servings`**: Number of servings. **If not stated, estimate from ingredient quantities** (default: "2-4" for typical home cooking).
+    -   **`main_image_url`**: **CRITICAL**: ALWAYS use the thumbnail URL: {metadata.thumbnail_url}. Do NOT leave this field empty. Do NOT try to find other images. Use the thumbnail provided.
+    -   **`ingredients`**: Create a list of all ingredients. Each ingredient must be an object with `name`, `quantity`, `unit`, and optional `notes`.
+        - **For missing quantities**: Estimate reasonable amounts based on servings and typical recipe ratios. For example, if making 4 servings of salmon, estimate ~6 oz per fillet.
+        - Set `quantity` to 0 ONLY for truly variable items like "salt to taste", "pepper to taste", "herbs for garnish".
+        - **For main proteins/vegetables**: Always provide quantity estimates if not stated (e.g., "4 salmon fillets" → quantity: 4, unit: "fillets").
+        - Be as precise as possible with measurements.
     -   **`instructions`**: Create a list of all steps. Each step must be a separate object with a `step_number`, an optional `section_name`, and a `description` of the action.
 
     **COLOR PALETTE:**
@@ -113,21 +138,20 @@ def generate_content_and_tags(
         
         response_data = json.loads(cleaned_response_text)
         
+        # Check if this is a recipe video
+        if not response_data.get("is_recipe", True):
+            reason = response_data.get("reason", "This video is not about cooking or recipe preparation")
+            logger.warning(f"Non-recipe video detected: {reason}")
+            raise ValueError(f"Not a recipe video: {reason}")
+        
         return response_data
         
     except (json.JSONDecodeError, AttributeError) as e:
         logger.error(f"Error parsing LLM response: {e}")
-        return {
-            "extracted_content": {
-                "type": "General Information",
-                "details": {"summary": "Could not parse data from video transcript."}
-            },
-            "tags": {
-                "macro": ["Error"],
-                "topic": ["Parsing"],
-                "content": []
-            }
-        }
+        raise ValueError("Could not parse recipe data from video. The video might not contain a clear recipe.")
+    except ValueError as ve:
+        # Re-raise ValueError (includes non-recipe detection)
+        raise
     except Exception as e:
         logger.error(f"An unexpected error occurred with the Gemini API: {e}")
         raise RuntimeError("Failed to get a valid response from Gemini API.") from e
