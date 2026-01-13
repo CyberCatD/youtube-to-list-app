@@ -93,3 +93,54 @@ class YouTubeProcessResponseSchema(BaseModel):
 class ErrorResponseSchema(BaseModel):
     detail: str
 
+
+# --- Schemas for Grocery Lists ---
+
+class GroceryListItemSchema(BaseModel):
+    id: int
+    ingredient_name: str
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    category: Optional[str] = None
+    is_checked: bool = False
+    recipe_ids: Optional[List[int]] = None
+    retail_package: Optional[str] = None
+    retail_package_count: Optional[int] = None
+    exact_amount: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GroceryListItemUpdateSchema(BaseModel):
+    is_checked: Optional[bool] = None
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+
+
+class RecipeSummarySchema(BaseModel):
+    id: int
+    name: str
+    main_image_url: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GroceryListSchema(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    updated_at: datetime
+    items: List[GroceryListItemSchema] = []
+    recipes: List[RecipeSummarySchema] = []
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GroceryListCreateSchema(BaseModel):
+    name: Optional[str] = "My Grocery List"
+    recipe_ids: List[int] = []
+
+
+class GroceryListAddRecipeSchema(BaseModel):
+    recipe_id: int
+

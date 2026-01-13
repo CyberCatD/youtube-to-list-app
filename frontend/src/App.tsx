@@ -2,13 +2,20 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import RecipeGallery from './components/RecipeGallery';
 import RecipeDetail from './components/RecipeDetail';
+import GroceryLists from './components/GroceryLists';
+import GroceryListView from './components/GroceryList';
 import { Home, UtensilsCrossed, ShoppingCart, Calendar, User, Menu, X } from 'lucide-react';
 
 function App() {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (path === '/grocery-lists') {
+      return location.pathname.startsWith('/grocery-lists');
+    }
+    return location.pathname === path;
+  };
 
   return (
     <div className="bg-gray-100 min-h-screen pb-20 md:pb-0">
@@ -35,9 +42,9 @@ function App() {
               Home
             </Link>
             <Link 
-              to="/grocery-list" 
+              to="/grocery-lists" 
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-                isActive('/grocery-list') ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'
+                isActive('/grocery-lists') ? 'bg-blue-100 text-blue-600' : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
               <ShoppingCart size={20} />
@@ -75,7 +82,7 @@ function App() {
               Home
             </Link>
             <Link 
-              to="/grocery-list" 
+              to="/grocery-lists" 
               onClick={() => setMobileMenuOpen(false)}
               className="flex items-center gap-3 px-3 py-3 rounded-lg text-gray-700 hover:bg-gray-100"
             >
@@ -99,6 +106,8 @@ function App() {
         <Routes>
           <Route path="/" element={<RecipeGallery />} />
           <Route path="/recipe/:id" element={<RecipeDetail />} />
+          <Route path="/grocery-lists" element={<GroceryLists />} />
+          <Route path="/grocery-lists/:id" element={<GroceryListView />} />
         </Routes>
       </main>
 
@@ -115,9 +124,9 @@ function App() {
             <span className="text-xs mt-1">Home</span>
           </Link>
           <Link 
-            to="/grocery-list" 
+            to="/grocery-lists" 
             className={`flex flex-col items-center px-4 py-2 rounded-lg ${
-              isActive('/grocery-list') ? 'text-blue-600' : 'text-gray-500'
+              isActive('/grocery-lists') ? 'text-blue-600' : 'text-gray-500'
             }`}
           >
             <ShoppingCart size={24} />

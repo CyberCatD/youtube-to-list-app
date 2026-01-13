@@ -2,23 +2,38 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import QueuePool
 
-# Build an absolute path for the database file to ensure it's always
-# created in the 'youtube_to_list' project directory, regardless of
-# where the application is run from.
-# __file__ -> .../youtube_to_list/src/database.py
-# os.path.dirname(__file__) -> .../youtube_to_list/src
-# os.path.dirname(...) -> .../youtube_to_list
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "youtube_cards.db")
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
+DEFAULT_SQLITE_URL = f"sqlite:///{DB_PATH}"
 
+DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_SQLITE_URL)
+
+SQLALCHEMY_DATABASE_URL = DATABASE_URL
+
+connect_args = {}
+engine_kwargs = {}
+
+if DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+else:
+    engine_kwargs = {
+        "poolclass": QueuePool,
+        "pool_size": 5,
+        "max_overflow": 10,
+        "pool_pre_ping": True,
+        "pool_recycle": 3600,
+    }
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL,
+    connect_args=connect_args,
+    **engine_kwargs
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
 
 def get_db():
     db = SessionLocal()

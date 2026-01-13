@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 import os
 import logging
 
-from .api.v1.endpoints import youtube, recipes
+from .api.v1.endpoints import youtube, recipes, grocery_lists
 from .database import engine, Base
 from .scheduler import start_scheduler
 
@@ -218,5 +218,6 @@ def health_check():
 
 app.include_router(youtube.router, prefix="/api/v1/youtube", tags=["youtube"])
 app.include_router(recipes.router, prefix="/api/v1/recipes", tags=["recipes"])
+app.include_router(grocery_lists.router, prefix="/api/v1/grocery-lists", tags=["grocery-lists"])
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

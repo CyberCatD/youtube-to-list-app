@@ -41,3 +41,31 @@ export interface Recipe {
   instructions: Instruction[];
   tags: Tag[];
 }
+
+export interface GroceryListItem {
+  id: number;
+  ingredient_name: string;
+  quantity: number | null;
+  unit: string | null;
+  category: string | null;
+  is_checked: boolean;
+  recipe_ids: number[] | null;
+  retail_package: string | null;
+  retail_package_count: number | null;
+  exact_amount: string | null;
+}
+
+export interface RecipeSummary {
+  id: number;
+  name: string;
+  main_image_url: string | null;
+}
+
+export interface GroceryList {
+  id: number;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  items: GroceryListItem[];
+  recipes: RecipeSummary[];
+}

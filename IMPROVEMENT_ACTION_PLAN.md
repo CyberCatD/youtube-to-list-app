@@ -703,13 +703,13 @@ def get_job_status(job_id: str):
 
 ---
 
-## Phase 5: Frontend Enhancements 🟡 MEDIUM
+## Phase 5: Frontend Enhancements & UX Redesign 🟡 MEDIUM
 **Priority:** MEDIUM  
-**Effort:** 2 days  
+**Effort:** 4-5 days  
 **Risk:** LOW
 
 ### Objectives
-Improve frontend performance, UX, and error handling.
+Improve frontend performance, UX, and error handling. Redesign RecipeDetail page with SirFryAlot-inspired features.
 
 ### Tasks
 
@@ -921,6 +921,254 @@ const [imageLoaded, setImageLoaded] = useState(false);
 - [ ] Smooth loading transitions
 - [ ] Fallback for failed images
 - [ ] Page load time improved
+
+---
+
+#### 5.4 SirFryAlot-Inspired Recipe Detail Redesign
+**Reference:** https://sirfryalot.com
+
+##### 5.4.1 Portion Scaling UI
+**File:** `frontend/src/components/RecipeDetail.tsx`
+
+- Add `- [quantity] +` controls above ingredients list
+- Real-time ingredient recalculation when portions change
+- Store original quantities, calculate scaled values on render
+
+```typescript
+const [portions, setPortions] = useState(recipe.servings || 4);
+const scaleFactor = portions / originalServings;
+
+// Scale ingredient quantity
+const scaledQuantity = ingredient.quantity * scaleFactor;
+```
+
+**Acceptance Criteria:**
+- [ ] +/- buttons visible above ingredients
+- [ ] Ingredients recalculate correctly when portions change
+- [ ] Minimum 1 portion enforced
+
+---
+
+##### 5.4.2 Side-by-Side Layout
+**File:** `frontend/src/components/RecipeDetail.tsx`
+
+- Desktop/tablet: Ingredients column (left) + Instructions column (right)
+- Mobile: Stack vertically (ingredients first, then instructions)
+- Use CSS Grid for responsive layout
+
+```typescript
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+  <div className="lg:col-span-1">
+    {/* Ingredients */}
+  </div>
+  <div className="lg:col-span-2">
+    {/* Instructions */}
+  </div>
+</div>
+```
+
+**Acceptance Criteria:**
+- [ ] Desktop shows 2-column layout
+- [ ] Mobile stacks vertically
+- [ ] Ingredients visible while reading instructions on desktop
+
+---
+
+##### 5.4.3 Inline Ingredient Amounts in Instructions
+**Files:** `frontend/src/components/RecipeDetail.tsx`, `frontend/src/utils/instructionParser.ts` (NEW)
+
+- Parse instruction text to identify ingredient references
+- Replace with formatted amounts: "Add the **1360 g butternut squash**..."
+- Scale amounts based on portion setting
+
+```typescript
+function parseInstructionWithIngredients(
+  instruction: string, 
+  ingredients: Ingredient[], 
+  scaleFactor: number
+): ReactNode {
+  // Match ingredient names in text and wrap with formatted amounts
+}
+```
+
+**Acceptance Criteria:**
+- [ ] Ingredient quantities appear inline in instruction text
+- [ ] Amounts scale with portion changes
+- [ ] Ingredient references visually highlighted
+
+---
+
+##### 5.4.4 Step Timing & Progress Tracking
+**File:** `frontend/src/components/RecipeDetail.tsx`
+
+- Display estimated time for each step (parse from instruction or use defaults)
+- Show step progress: "Step 1 of 7"
+- Calculate and display total remaining time
+- Progress bar visualization
+
+```typescript
+<div className="flex justify-between items-center mb-4">
+  <span>Step {currentStep} of {totalSteps}</span>
+  <span>{remainingMinutes} minutes remaining</span>
+</div>
+<div className="w-full bg-gray-200 rounded-full h-2">
+  <div 
+    className="bg-blue-600 h-2 rounded-full" 
+    style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+  />
+</div>
+```
+
+**Acceptance Criteria:**
+- [ ] Step progress indicator visible
+- [ ] Remaining time calculated and displayed
+- [ ] Progress bar updates as steps complete
+
+---
+
+##### 5.4.5 Step Completion Checkboxes
+**File:** `frontend/src/components/RecipeDetail.tsx`
+
+- Add circle checkbox to each instruction step
+- Visual feedback when step marked complete (dim + strikethrough)
+- Persist state during session (local state or localStorage)
+- Update remaining time when steps completed
+
+```typescript
+const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+
+const toggleStep = (stepNumber: number) => {
+  setCompletedSteps(prev => {
+    const next = new Set(prev);
+    if (next.has(stepNumber)) next.delete(stepNumber);
+    else next.add(stepNumber);
+    return next;
+  });
+};
+```
+
+**Acceptance Criteria:**
+- [ ] Checkboxes toggle correctly
+- [ ] Completed steps visually distinct
+- [ ] Remaining time updates when steps completed
+
+---
+
+##### 5.4.6 Ingredient Section Grouping
+**Files:** `frontend/src/components/RecipeDetail.tsx`, `youtube_to_list/src/services/llm_service.py`
+
+- Group ingredients by `section_name` (e.g., "Main Ingredients", "For the Sauce")
+- Display section headers with visual separation
+- Update LLM prompt to extract ingredient sections reliably
+
+```typescript
+const ingredientsBySection = groupBy(ingredients, 'section_name');
+
+{Object.entries(ingredientsBySection).map(([section, items]) => (
+  <div key={section}>
+    <h4 className="font-semibold text-lg mb-2">{section || 'Ingredients'}</h4>
+    {items.map(item => <IngredientRow key={item.id} {...item} />)}
+  </div>
+))}
+```
+
+**Acceptance Criteria:**
+- [ ] Ingredients grouped under section headers
+- [ ] Sections visually separated
+- [ ] LLM extracts section names for new recipes
+
+---
+
+##### 5.4.7 Enhanced Nutrition Display
+**File:** `frontend/src/components/RecipeDetail.tsx`
+
+- Table format with columns: Nutrient | Per Serving | % Daily Value
+- Expandable "Show more nutrients data" section
+- Include disclaimer about estimates
+
+```typescript
+<table className="w-full">
+  <thead>
+    <tr>
+      <th>Nutrient</th>
+      <th>Per serving</th>
+      <th>% Daily Value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Calories</td><td>{calories} kcal</td><td>{caloriesDV}%</td></tr>
+    {/* More nutrients */}
+  </tbody>
+</table>
+```
+
+**Acceptance Criteria:**
+- [ ] Nutrition table renders with % Daily Value
+- [ ] Expandable section for additional nutrients
+- [ ] Disclaimer text present
+
+---
+
+##### 5.4.8 Dark Mode Theme
+**Files:** `frontend/src/App.tsx`, `frontend/src/index.css`, `frontend/tailwind.config.js`
+
+- Implement dark mode color scheme matching SirFryAlot aesthetic
+- Toggle switch in header or settings
+- Persist preference in localStorage
+- Use Tailwind dark mode classes
+
+```typescript
+// tailwind.config.js
+module.exports = {
+  darkMode: 'class',
+  // ...
+}
+
+// Toggle component
+const [darkMode, setDarkMode] = useState(
+  localStorage.getItem('darkMode') === 'true'
+);
+```
+
+**Acceptance Criteria:**
+- [ ] Dark mode toggle visible
+- [ ] Colors match SirFryAlot design
+- [ ] Preference persists across sessions
+
+---
+
+##### 5.4.9 Recipe Metadata Bar
+**File:** `frontend/src/components/RecipeDetail.tsx`
+
+- Clean horizontal bar showing: Difficulty | Total Time | Calories
+- Icons for each metadata item
+- Responsive sizing
+
+```typescript
+<div className="flex items-center gap-6 text-sm text-gray-600">
+  <span className="flex items-center gap-1">
+    <ChartIcon /> Easy
+  </span>
+  <span className="flex items-center gap-1">
+    <ClockIcon /> 80 mins
+  </span>
+  <span className="flex items-center gap-1">
+    <FireIcon /> 300 kcal
+  </span>
+</div>
+```
+
+**Acceptance Criteria:**
+- [ ] Metadata bar visible below recipe title
+- [ ] Icons display correctly
+- [ ] Responsive on mobile
+
+---
+
+**5.4 Dependencies:**
+- 5.4.3 (Inline Amounts) depends on 5.4.1 (Portion Scaling) for scaled values
+- 5.4.4 (Step Progress) integrates with 5.4.5 (Checkboxes) for remaining time
+- 5.4.6 (Sections) requires LLM prompt update for section extraction
 
 ---
 
@@ -1761,6 +2009,262 @@ Document all endpoints:
 
 ---
 
+## Phase 10: Search & Discovery Features 🟡 MEDIUM
+**Priority:** MEDIUM  
+**Effort:** 3-4 days  
+**Risk:** LOW
+
+### Objectives
+Enhance recipe discovery through tag-based search, ingredient matching, and advanced filtering.
+
+### Tasks
+
+#### 10.1 Display Ingredient Tags on Recipe Cards
+**File:** `frontend/src/components/RecipeGallery.tsx`
+
+- Show top 3 ingredient tags as small badges below recipe metadata
+- Truncate with "+X more" if recipe has more ingredients
+- Style tags consistently with existing badge styles
+
+```typescript
+<div className="flex flex-wrap gap-1 mt-2">
+  {recipe.tags.slice(0, 3).map(tag => (
+    <span key={tag.id} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">
+      {tag.name}
+    </span>
+  ))}
+  {recipe.tags.length > 3 && (
+    <span className="text-xs text-gray-400">+{recipe.tags.length - 3} more</span>
+  )}
+</div>
+```
+
+**Acceptance Criteria:**
+- [ ] Tags visible on recipe cards
+- [ ] Maximum 3 tags shown with overflow indicator
+- [ ] Tags styled consistently
+
+---
+
+#### 10.2 Tag-Based Search
+**Files:** `frontend/src/components/RecipeGallery.tsx`, `youtube_to_list/src/api/v1/endpoints/recipes.py`
+
+- Add search input above recipe grid
+- Support ingredient-based queries: "chicken rice garlic"
+- Backend endpoint filters recipes by tag intersection
+- Debounced search for performance
+
+**Backend:**
+```python
+@router.get("/search/by-ingredients")
+def search_by_ingredients(
+    ingredients: str = Query(..., description="Space-separated ingredient names"),
+    db: Session = Depends(get_db)
+):
+    ingredient_list = ingredients.lower().split()
+    # Find recipes containing ALL specified ingredients
+    query = db.query(Recipe).join(Recipe.tags).filter(
+        Tag.name.in_(ingredient_list)
+    ).group_by(Recipe.id).having(
+        func.count(Tag.id) >= len(ingredient_list)
+    )
+    return {"recipes": query.all()}
+```
+
+**Frontend:**
+```typescript
+const [searchQuery, setSearchQuery] = useState('');
+const debouncedSearch = useDebounce(searchQuery, 300);
+
+// Filter recipes by search
+const filteredRecipes = recipes.filter(recipe => 
+  recipe.tags.some(tag => 
+    debouncedSearch.toLowerCase().split(' ').some(term => 
+      tag.name.includes(term)
+    )
+  )
+);
+```
+
+**Acceptance Criteria:**
+- [ ] Search input visible above recipes
+- [ ] Typing filters recipes in real-time
+- [ ] Multiple ingredient search works (AND logic)
+- [ ] Empty search shows all recipes
+
+---
+
+#### 10.3 Pantry Mode
+**Files:** `frontend/src/components/PantryMode.tsx` (NEW), `youtube_to_list/src/api/v1/endpoints/recipes.py`
+
+- User enters ingredients they have available
+- App ranks recipes by ingredient match percentage
+- Display: "You have 7/10 ingredients for this recipe"
+- Sort by match % or filter to show only 80%+ matches
+
+**Backend:**
+```python
+@router.post("/search/pantry-match")
+def pantry_match(
+    available_ingredients: List[str],
+    min_match_percent: int = 50,
+    db: Session = Depends(get_db)
+):
+    # Calculate match % for each recipe
+    results = []
+    for recipe in db.query(Recipe).all():
+        recipe_ingredients = {tag.name for tag in recipe.tags if tag.tag_type == 'ingredient'}
+        matches = len(recipe_ingredients.intersection(set(available_ingredients)))
+        total = len(recipe_ingredients)
+        match_percent = (matches / total * 100) if total > 0 else 0
+        if match_percent >= min_match_percent:
+            results.append({
+                "recipe": recipe,
+                "match_percent": match_percent,
+                "matched": matches,
+                "total": total
+            })
+    return sorted(results, key=lambda x: -x["match_percent"])
+```
+
+**Acceptance Criteria:**
+- [ ] Pantry input UI available
+- [ ] Recipes ranked by match percentage
+- [ ] Match stats displayed (X/Y ingredients)
+- [ ] Configurable minimum match threshold
+
+---
+
+#### 10.4 Advanced Filtering UI
+**File:** `frontend/src/components/RecipeFilters.tsx` (NEW)
+
+- Multi-select tag filters (checkboxes or pills)
+- Cooking time range slider
+- Difficulty level filter (if available)
+- Dietary restriction toggles (auto-detect from ingredients: vegan, vegetarian, gluten-free)
+- Filter combinations (AND logic)
+
+```typescript
+interface FilterState {
+  categories: string[];
+  cuisines: string[];
+  maxCookTime: number | null;
+  dietary: string[];
+  ingredients: string[];
+}
+
+const [filters, setFilters] = useState<FilterState>({
+  categories: [],
+  cuisines: [],
+  maxCookTime: null,
+  dietary: [],
+  ingredients: []
+});
+```
+
+**Acceptance Criteria:**
+- [ ] Multiple filters can be applied simultaneously
+- [ ] Clear filters button resets all
+- [ ] Filter state persists during session
+- [ ] Responsive filter UI (collapsible on mobile)
+
+---
+
+#### 10.5 Tag Management (Admin)
+**Files:** `youtube_to_list/src/api/v1/endpoints/tags.py` (NEW), `frontend/src/components/admin/TagManager.tsx` (NEW)
+
+- Admin UI to view all tags
+- Merge similar tags (e.g., "chicken breast" + "chicken" → "chicken")
+- Tag synonyms support
+- Custom tag categories beyond 'ingredient'
+- Bulk operations: rename, delete unused tags
+
+**Endpoints:**
+```python
+@router.get("/tags")
+def list_tags(db: Session = Depends(get_db)):
+    return db.query(Tag).all()
+
+@router.post("/tags/merge")
+def merge_tags(source_id: int, target_id: int, db: Session = Depends(get_db)):
+    # Move all associations from source to target, then delete source
+    ...
+
+@router.delete("/tags/{tag_id}")
+def delete_tag(tag_id: int, db: Session = Depends(get_db)):
+    # Only delete if no recipes associated
+    ...
+```
+
+**Acceptance Criteria:**
+- [ ] Tag list viewable in admin
+- [ ] Tags can be merged
+- [ ] Unused tags can be deleted
+- [ ] Tag counts displayed
+
+---
+
+#### 10.6 Dynamic Category Management
+**Files:** `youtube_to_list/src/api/v1/endpoints/categories.py` (NEW), `frontend/src/components/RecipeGallery.tsx`
+
+- Replace hardcoded category list with database-driven categories
+- Auto-populate categories from existing recipes
+- Allow custom category creation
+- Category counts shown in filter pills
+
+```python
+@router.get("/categories")
+def list_categories(db: Session = Depends(get_db)):
+    return db.query(Recipe.category, func.count(Recipe.id))\
+        .filter(Recipe.category.isnot(None))\
+        .group_by(Recipe.category)\
+        .all()
+```
+
+**Acceptance Criteria:**
+- [ ] Categories fetched from API
+- [ ] New categories appear automatically
+- [ ] Category counts accurate
+- [ ] Empty categories hidden
+
+---
+
+#### 10.7 Improved Delete UX
+**File:** `frontend/src/components/RecipeGallery.tsx`, `frontend/src/components/ui/ConfirmModal.tsx` (NEW)
+
+- Replace alert-based confirmation with modal dialog
+- Show recipe name in confirmation
+- Support batch selection and deletion
+- Undo option (soft delete with 30-second recovery)
+
+```typescript
+<ConfirmModal
+  isOpen={deleteModalOpen}
+  title="Delete Recipe"
+  message={`Are you sure you want to delete "${recipe.name}"?`}
+  confirmText="Delete"
+  cancelText="Cancel"
+  onConfirm={handleConfirmDelete}
+  onCancel={() => setDeleteModalOpen(false)}
+/>
+```
+
+**Acceptance Criteria:**
+- [ ] Modal dialog for delete confirmation
+- [ ] Recipe name shown in confirmation
+- [ ] Cancel button works
+- [ ] Optional: undo within 30 seconds
+
+---
+
+### 10.x Dependencies
+- 10.2 (Tag Search) requires 10.1 (Tag Display) for consistent UX
+- 10.4 (Advanced Filtering) builds on 10.2 (Tag Search)
+- 10.5 (Tag Management) is independent, admin-only feature
+- 10.6 (Dynamic Categories) can be done independently
+
+---
+
 ## Implementation Timeline
 
 | Phase | Duration | Dependencies | Start After |
@@ -1769,13 +2273,14 @@ Document all endpoints:
 | Phase 2: Database | 2-3 days | None | Immediately (parallel) |
 | Phase 3: Reliability | 2 days | Phase 1 | Phase 1 complete |
 | Phase 4: API Improvements | 2 days | Phase 2 | Phase 2 complete |
-| Phase 5: Frontend | 2 days | Phase 4 | Phase 4 complete |
+| Phase 5: Frontend & UX | 4-5 days | Phase 4 | Phase 4 complete |
 | Phase 6: Observability | 1-2 days | Phase 1 | Phase 1 complete |
 | Phase 7: Configuration | 0.5 days | None | Anytime |
 | Phase 8: Testing | 3 days | Phases 1-5 | After Phases 1-5 |
 | Phase 9: Code Quality | 1 day | None | Anytime |
+| Phase 10: Search & Discovery | 3-4 days | Phases 4, 5 | After Phase 5 |
 
-**Total Estimated Time:** 15-20 development days
+**Total Estimated Time:** 20-26 development days
 
 ---
 
@@ -1895,7 +2400,12 @@ Document all endpoints:
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** 2026-01-03  
+**Document Version:** 1.2  
+**Last Updated:** 2026-01-12  
 **Owner:** Development Team  
 **Review Date:** After Phase 8 completion
+
+**Changelog:**
+- v1.2 (2026-01-12): Added Phase 10 (Search & Discovery), added SirFryAlot UI features to Phase 5
+- v1.1 (2026-01-10): Added Grocery List and Retail Package features
+- v1.0 (2026-01-03): Initial plan created

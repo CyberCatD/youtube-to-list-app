@@ -1,7 +1,7 @@
 import google.generativeai as genai
-from src.config import GOOGLE_API_KEY
+from src.config import GOOGLE_API_KEY, DEFAULT_RECIPE_LANGUAGE
 from src.schemas import VideoMetadataSchema, TagsSchema
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import json
 import logging
 
@@ -15,12 +15,19 @@ MODEL_NAME = "gemini-2.5-flash"
 def generate_content_and_tags(
     metadata: VideoMetadataSchema,
     transcript: str,
+    language: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Sends the transcript and video metadata to the Gemini API for content extraction and tagging.
     Returns a dictionary containing the extracted content and tags.
     Raises ValueError if content is not a recipe/cooking video.
+    
+    Args:
+        metadata: Video metadata including title, description, URL, etc.
+        transcript: Full video transcript text.
+        language: Output language for the recipe. Defaults to DEFAULT_RECIPE_LANGUAGE from config.
     """
+    output_language = language or DEFAULT_RECIPE_LANGUAGE
     prompt = f"""
     You are an AI assistant tasked with transforming video content into structured, actionable data.
     
@@ -53,11 +60,12 @@ def generate_content_and_tags(
     **CRITICAL INSTRUCTIONS (GENERAL):**
     1.  Your primary goal is to extract structured data for a recipe or protocol.
     2.  Use the video description, comments, and transcript as your sources. The description and comments are the most reliable sources for specific details.
-    3.  **CRITICAL - Missing Data Handling**: When specific information is not provided in the video:
+    3.  **LANGUAGE REQUIREMENT**: ALL output text MUST be in {output_language}, regardless of the source video's language. Translate recipe names, ingredient names, instructions, and all other text fields to {output_language}.
+    4.  **CRITICAL - Missing Data Handling**: When specific information is not provided in the video:
         - For **timing** (prep_time, cook_time): Estimate based on the recipe complexity and cooking methods shown. If uncertain, use reasonable defaults (e.g., simple recipes: PT10M prep, PT15M cook).
         - For **ingredient quantities**: If not specified, extrapolate based on the number of servings (default to 2-4 servings if not mentioned). Set quantity to 0 ONLY if it's truly "to taste" (salt, pepper, herbs).
         - For **servings**: If not stated, estimate based on ingredient quantities (typically 2-4 servings for most recipe videos).
-    4.  Provide complete, usable data rather than leaving fields empty.
+    5.  Provide complete, usable data rather than leaving fields empty.
 
     **JSON OUTPUT STRUCTURE:**
     Your entire output must be a single, valid JSON object with the following structure. Do not include any text or markdown outside of this JSON.
@@ -108,6 +116,7 @@ def generate_content_and_tags(
         - **`servings`**: Number of servings. **If not stated, estimate from ingredient quantities** (default: "2-4" for typical home cooking).
     -   **`main_image_url`**: **CRITICAL**: ALWAYS use the thumbnail URL: {metadata.thumbnail_url}. Do NOT leave this field empty. Do NOT try to find other images. Use the thumbnail provided.
     -   **`ingredients`**: Create a list of all ingredients. Each ingredient must be an object with `name`, `quantity`, `unit`, and optional `notes`.
+        - **CRITICAL - Ingredient Name Parsing**: The `name` field must contain the actual ingredient name (e.g., "Refrigerated Pie Crusts", "Chicken Breast", "Flour"). NEVER put punctuation marks like ")" or "(" as the ingredient name. If parsing "1 package (15 oz) refrigerated pie crusts (2 crusts)", the correct extraction is: name="Refrigerated Pie Crusts", quantity=1, unit="package", notes="15 oz, 2 crusts".
         - **For missing quantities**: Estimate reasonable amounts based on servings and typical recipe ratios. For example, if making 4 servings of salmon, estimate ~6 oz per fillet.
         - Set `quantity` to 0 ONLY for truly variable items like "salt to taste", "pepper to taste", "herbs for garnish".
         - **For main proteins/vegetables**: Always provide quantity estimates if not stated (e.g., "4 salmon fillets" → quantity: 4, unit: "fillets").

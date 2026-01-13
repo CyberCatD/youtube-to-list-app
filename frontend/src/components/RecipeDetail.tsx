@@ -1,13 +1,22 @@
 // src/components/RecipeDetail.tsx
+//
+// TODO: Visual Enhancements (inspired by SirFryAlot.com)
+// 1. Portion Scaling UI - Add +/- controls to adjust recipe servings with real-time ingredient recalculation
+// 2. Measurement System Toggle - Allow switching between US (cups, oz) and Metric (ml, g) in settings
+// 3. Inline Ingredient Amounts - Show ingredient quantities within instruction steps (e.g., "Add [2 cups] flour")
+// 4. Side-by-Side Layout - Display ingredients alongside cooking steps on tablet/desktop (responsive)
+// 5. Screen Lock Feature - Prevent screen timeout during cooking mode
+// 6. Step Tracking - Allow marking individual steps as completed while cooking
+//
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import type { Recipe } from '../types';
+import type { Recipe, GroceryList } from '../types';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Pencil, Check, X, Upload, RefreshCw, ImageIcon } from 'lucide-react';
+import { Pencil, Check, X, Upload, RefreshCw, ImageIcon, ShoppingCart, Plus } from 'lucide-react';
 
 const formatDuration = (isoDuration: string | null): string => {
   if (!isoDuration) return '';
@@ -158,6 +167,7 @@ const convertUnits = (quantity: number | null, unit: string | null, toMetric: bo
 
 const RecipeDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +181,53 @@ const RecipeDetail = () => {
   const [nutrition, setNutrition] = useState<any>(null);
   const [loadingNutrition, setLoadingNutrition] = useState(false);
   const [showNutrition, setShowNutrition] = useState(false);
+  const [groceryLists, setGroceryLists] = useState<GroceryList[]>([]);
+  const [showGroceryMenu, setShowGroceryMenu] = useState(false);
+  const [addingToList, setAddingToList] = useState(false);
+
+  const fetchGroceryLists = async () => {
+    try {
+      const response = await axios.get('/api/v1/grocery-lists/');
+      setGroceryLists(response.data);
+    } catch (err) {
+      console.error('Failed to fetch grocery lists:', err);
+    }
+  };
+
+  const handleAddToNewList = async () => {
+    if (!recipe) return;
+    setAddingToList(true);
+    try {
+      const response = await axios.post('/api/v1/grocery-lists/', {
+        name: `Grocery List - ${new Date().toLocaleDateString()}`,
+        recipe_ids: [recipe.id],
+      });
+      setShowGroceryMenu(false);
+      navigate(`/grocery-lists/${response.data.id}`);
+    } catch (err) {
+      console.error('Failed to create grocery list:', err);
+      alert('Failed to create grocery list');
+    } finally {
+      setAddingToList(false);
+    }
+  };
+
+  const handleAddToExistingList = async (listId: number) => {
+    if (!recipe) return;
+    setAddingToList(true);
+    try {
+      await axios.post(`/api/v1/grocery-lists/${listId}/recipes`, {
+        recipe_id: recipe.id,
+      });
+      setShowGroceryMenu(false);
+      navigate(`/grocery-lists/${listId}`);
+    } catch (err) {
+      console.error('Failed to add to grocery list:', err);
+      alert('Failed to add to grocery list');
+    } finally {
+      setAddingToList(false);
+    }
+  };
 
   const fetchNutrition = async () => {
     if (!id || nutrition) return;
@@ -450,6 +507,54 @@ const RecipeDetail = () => {
             )}
           </div>
         )}
+
+        <div className="mt-4 relative">
+          <button
+            onClick={() => {
+              if (!showGroceryMenu) {
+                fetchGroceryLists();
+              }
+              setShowGroceryMenu(!showGroceryMenu);
+            }}
+            disabled={addingToList}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            <ShoppingCart size={18} />
+            <span>{addingToList ? 'Adding...' : 'Add to Grocery List'}</span>
+          </button>
+
+          {showGroceryMenu && (
+            <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border z-10">
+              <div className="p-2">
+                <button
+                  onClick={handleAddToNewList}
+                  disabled={addingToList}
+                  className="w-full flex items-center gap-2 p-2 text-left text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                >
+                  <Plus size={18} />
+                  <span>Create new list</span>
+                </button>
+                {groceryLists.length > 0 && (
+                  <>
+                    <div className="border-t my-2" />
+                    <p className="px-2 py-1 text-xs text-gray-500 font-medium">Add to existing list:</p>
+                    {groceryLists.slice(0, 5).map(list => (
+                      <button
+                        key={list.id}
+                        onClick={() => handleAddToExistingList(list.id)}
+                        disabled={addingToList}
+                        className="w-full flex items-center gap-2 p-2 text-left text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                      >
+                        <ShoppingCart size={16} className="text-gray-400" />
+                        <span className="truncate">{list.name}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </CardHeader>
 
       <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6">
