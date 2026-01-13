@@ -144,3 +144,41 @@ class GroceryListCreateSchema(BaseModel):
 class GroceryListAddRecipeSchema(BaseModel):
     recipe_id: int
 
+
+# --- Schemas for LLM Response Validation ---
+
+class LLMIngredientSchema(BaseModel):
+    name: str
+    quantity: Optional[float] = 0
+    unit: Optional[str] = None
+    notes: Optional[str] = None
+
+class LLMInstructionSchema(BaseModel):
+    step_number: int
+    section_name: Optional[str] = None
+    description: str
+
+class LLMTagsSchema(BaseModel):
+    macro: List[str] = Field(default_factory=list)
+    topic: List[str] = Field(default_factory=list)
+    content: List[str] = Field(default_factory=list)
+
+class LLMRecipeDetailsSchema(BaseModel):
+    name: str
+    prep_time: Optional[str] = None
+    cook_time: Optional[str] = None
+    total_time: Optional[str] = None
+    servings: Optional[str] = None
+    category: Optional[str] = None
+    cuisine: Optional[str] = None
+    calories: Optional[int] = None
+
+class LLMResponseSchema(BaseModel):
+    is_recipe: bool = True
+    reason: Optional[str] = None
+    recipe_details: Optional[LLMRecipeDetailsSchema] = None
+    ingredients: Optional[List[LLMIngredientSchema]] = None
+    instructions: Optional[List[LLMInstructionSchema]] = None
+    tags: Optional[LLMTagsSchema] = None
+    main_image_url: Optional[str] = None
+

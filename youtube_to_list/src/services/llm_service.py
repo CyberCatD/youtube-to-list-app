@@ -1,7 +1,10 @@
 import google.generativeai as genai
+from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable, DeadlineExceeded
 from src.config import GOOGLE_API_KEY, DEFAULT_RECIPE_LANGUAGE
-from src.schemas import VideoMetadataSchema, TagsSchema
+from src.schemas import VideoMetadataSchema, TagsSchema, LLMResponseSchema
+from pydantic import ValidationError
 from typing import Dict, Any, List, Optional
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
 import json
 import logging
 
@@ -12,6 +15,13 @@ genai.configure(api_key=GOOGLE_API_KEY)
 MODEL_NAME = "gemini-2.5-flash"
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=4, max=30),
+    retry=retry_if_exception_type((ResourceExhausted, ServiceUnavailable, DeadlineExceeded, ConnectionError, TimeoutError)),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True
+)
 def generate_content_and_tags(
     metadata: VideoMetadataSchema,
     transcript: str,
@@ -147,14 +157,21 @@ def generate_content_and_tags(
         
         response_data = json.loads(cleaned_response_text)
         
-        # Check if this is a recipe video
-        if not response_data.get("is_recipe", True):
-            reason = response_data.get("reason", "This video is not about cooking or recipe preparation")
+        validated_response = LLMResponseSchema.model_validate(response_data)
+        
+        if not validated_response.is_recipe:
+            reason = validated_response.reason or "This video is not about cooking or recipe preparation"
             logger.warning(f"Non-recipe video detected: {reason}")
             raise ValueError(f"Not a recipe video: {reason}")
         
+        if not validated_response.recipe_details or not validated_response.ingredients:
+            raise ValueError("LLM response missing required fields: recipe_details or ingredients")
+        
         return response_data
         
+    except ValidationError as e:
+        logger.error(f"LLM response validation failed: {e}")
+        raise ValueError(f"Invalid LLM response structure: {e.error_count()} validation errors")
     except (json.JSONDecodeError, AttributeError) as e:
         logger.error(f"Error parsing LLM response: {e}")
         raise ValueError("Could not parse recipe data from video. The video might not contain a clear recipe.")

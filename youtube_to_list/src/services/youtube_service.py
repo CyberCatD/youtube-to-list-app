@@ -1,16 +1,24 @@
 import os
 from datetime import datetime
 import logging
+from threading import Lock
 
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
 from dateutil import parser
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
+from cachetools import TTLCache, cached
 
 from src.config import GOOGLE_API_KEY, YOUTUBE_API_KEY
 from typing import List
 from src.schemas import VideoMetadataSchema
 
 logger = logging.getLogger(__name__)
+
+metadata_cache = TTLCache(maxsize=100, ttl=3600)
+transcript_cache = TTLCache(maxsize=100, ttl=3600)
+cache_lock = Lock()
 
 youtube_api_service = build(
     "youtube", "v3", developerKey=YOUTUBE_API_KEY
@@ -58,7 +66,16 @@ def check_transcript_availability(video_id: str) -> bool:
         return False
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((HttpError, ConnectionError, TimeoutError)),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True
+)
+@cached(cache=metadata_cache, lock=cache_lock)
 def get_video_metadata(video_id: str) -> VideoMetadataSchema:
+    logger.debug(f"Fetching metadata for video {video_id} (cache miss)")
     try:
         request = youtube_api_service.videos().list(
             part="snippet",
@@ -87,7 +104,16 @@ def get_video_metadata(video_id: str) -> VideoMetadataSchema:
         raise
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True
+)
+@cached(cache=transcript_cache, lock=cache_lock)
 def get_video_transcript(video_id: str, preferred_languages: list[str] = ["en", "en-US"]) -> str:
+    logger.debug(f"Fetching transcript for video {video_id} (cache miss)")
     try:
         # Updated to use new API (v1.2.3+)
         ytt_api = YouTubeTranscriptApi()
