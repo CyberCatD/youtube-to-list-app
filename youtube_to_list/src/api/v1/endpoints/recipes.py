@@ -1,18 +1,108 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File, Query
 from sqlalchemy.orm import Session
-from typing import List
+from sqlalchemy import or_
+from typing import List, Optional
+from math import ceil
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import logging
 
 from src.database import get_db
 from src.services import recipe_service, image_service, nutrition_service
-from src.schemas import RecipeSchema, RecipeListResponseSchema, ErrorResponseSchema, RecipeUpdateSchema
+from src.schemas import RecipeSchema, RecipeListResponseSchema, PaginatedRecipeListResponseSchema, ErrorResponseSchema, RecipeUpdateSchema
 from src.auth import verify_api_key
+from src.models import Recipe
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 logger = logging.getLogger(__name__)
+
+@router.get("/", response_model=PaginatedRecipeListResponseSchema, responses={500: {"model": ErrorResponseSchema}})
+def list_recipes(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    cuisine: Optional[str] = Query(None, description="Filter by cuisine"),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieves a paginated list of recipes with optional filtering.
+    """
+    try:
+        query = db.query(Recipe).filter(Recipe.is_deleted == False)
+        
+        if category:
+            query = query.filter(Recipe.category.ilike(f"%{category}%"))
+        if cuisine:
+            query = query.filter(Recipe.cuisine.ilike(f"%{cuisine}%"))
+        
+        total = query.count()
+        
+        offset = (page - 1) * page_size
+        recipes = query.order_by(Recipe.created_at.desc()).offset(offset).limit(page_size).all()
+        
+        total_pages = ceil(total / page_size) if total > 0 else 0
+        
+        logger.info(f"Retrieved {len(recipes)} recipes (page {page}/{total_pages}, total: {total})")
+        return PaginatedRecipeListResponseSchema(
+            recipes=recipes,
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=total_pages
+        )
+    except Exception as e:
+        logger.error(f"Error fetching recipes: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred while fetching recipes: {e}",
+        )
+
+@router.get("/search", response_model=PaginatedRecipeListResponseSchema)
+def search_recipes(
+    q: str = Query(..., min_length=1, description="Search query"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Search recipes by name, category, or cuisine.
+    """
+    search_term = f"%{q}%"
+    
+    query = db.query(Recipe).filter(
+        Recipe.is_deleted == False,
+        or_(
+            Recipe.name.ilike(search_term),
+            Recipe.category.ilike(search_term),
+            Recipe.cuisine.ilike(search_term)
+        )
+    )
+    
+    total = query.count()
+    offset = (page - 1) * page_size
+    recipes = query.order_by(Recipe.created_at.desc()).offset(offset).limit(page_size).all()
+    
+    total_pages = ceil(total / page_size) if total > 0 else 0
+    
+    logger.info(f"Search '{q}': found {total} recipes")
+    return PaginatedRecipeListResponseSchema(
+        recipes=recipes,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages
+    )
+
+@router.get("/trash/count", response_model=dict)
+def get_trash_count(
+    db: Session = Depends(get_db),
+):
+    """
+    Returns the count of recipes currently in trash.
+    """
+    count = recipe_service.get_trash_count(db)
+    return {"count": count}
 
 @router.get("/{recipe_id}", response_model=RecipeSchema, responses={404: {"model": ErrorResponseSchema}})
 def get_recipe(
@@ -30,23 +120,38 @@ def get_recipe(
         )
     return db_recipe
 
-@router.get("/", response_model=RecipeListResponseSchema, responses={500: {"model": ErrorResponseSchema}})
-def list_recipes(
+@router.get("/{recipe_id}/nutrition", responses={404: {"model": ErrorResponseSchema}})
+def get_recipe_nutrition(
+    recipe_id: int,
     db: Session = Depends(get_db),
 ):
     """
-    Retrieves a list of all created recipes (excluding deleted ones).
+    Calculate and return nutrition information for a recipe.
+    Uses USDA FoodData Central API to lookup ingredient nutrition.
     """
-    try:
-        recipes = recipe_service.get_all_recipes(db)
-        logger.info(f"Retrieved {len(recipes)} recipes from database")
-        return RecipeListResponseSchema(recipes=recipes)
-    except Exception as e:
-        logger.error(f"Error fetching recipes: {e}")
+    recipe = recipe_service.get_recipe_by_id(db, recipe_id)
+    if recipe is None:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred while fetching recipes: {e}",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Recipe with ID {recipe_id} not found.",
         )
+    
+    ingredients = []
+    for ing in recipe.ingredients:
+        ingredients.append({
+            "name": ing.ingredient.name,
+            "quantity": ing.quantity,
+            "unit": ing.unit,
+        })
+    
+    servings = nutrition_service.parse_servings(recipe.servings)
+    nutrition_data = nutrition_service.calculate_recipe_nutrition(ingredients, servings)
+    
+    nutrition_data["recipe_id"] = recipe_id
+    nutrition_data["recipe_name"] = recipe.name
+    
+    logger.info(f"Calculated nutrition for recipe ID {recipe_id}: {nutrition_data['ingredients_analyzed']} ingredients analyzed")
+    return nutrition_data
 
 @router.delete("/{recipe_id}", response_model=RecipeSchema, responses={404: {"model": ErrorResponseSchema}}, dependencies=[Depends(verify_api_key)])
 @limiter.limit("10/minute")
@@ -66,16 +171,6 @@ def delete_recipe(
         )
     logger.info(f"Moved recipe ID {recipe_id} to trash")
     return deleted_recipe
-
-@router.get("/trash/count", response_model=dict)
-def get_trash_count(
-    db: Session = Depends(get_db),
-):
-    """
-    Returns the count of recipes currently in trash.
-    """
-    count = recipe_service.get_trash_count(db)
-    return {"count": count}
 
 @router.post("/trash/restore", response_model=RecipeSchema, responses={404: {"model": ErrorResponseSchema}}, dependencies=[Depends(verify_api_key)])
 @limiter.limit("10/minute")
@@ -192,36 +287,3 @@ def fetch_recipe_image(
         return updated_recipe
     
     return recipe
-
-@router.get("/{recipe_id}/nutrition", responses={404: {"model": ErrorResponseSchema}})
-def get_recipe_nutrition(
-    recipe_id: int,
-    db: Session = Depends(get_db),
-):
-    """
-    Calculate and return nutrition information for a recipe.
-    Uses USDA FoodData Central API to lookup ingredient nutrition.
-    """
-    recipe = recipe_service.get_recipe_by_id(db, recipe_id)
-    if recipe is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Recipe with ID {recipe_id} not found.",
-        )
-    
-    ingredients = []
-    for ing in recipe.ingredients:
-        ingredients.append({
-            "name": ing.ingredient.name,
-            "quantity": ing.quantity,
-            "unit": ing.unit,
-        })
-    
-    servings = nutrition_service.parse_servings(recipe.servings)
-    nutrition_data = nutrition_service.calculate_recipe_nutrition(ingredients, servings)
-    
-    nutrition_data["recipe_id"] = recipe_id
-    nutrition_data["recipe_name"] = recipe.name
-    
-    logger.info(f"Calculated nutrition for recipe ID {recipe_id}: {nutrition_data['ingredients_analyzed']} ingredients analyzed")
-    return nutrition_data

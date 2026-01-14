@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 # --- Schema for passing data to the LLM ---
 
@@ -67,6 +67,13 @@ class RecipeSchema(BaseModel):
 class RecipeListResponseSchema(BaseModel):
     recipes: List[RecipeSchema]
 
+class PaginatedRecipeListResponseSchema(BaseModel):
+    recipes: List[RecipeSchema]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
 class RecipeUpdateSchema(BaseModel):
     name: Optional[str] = None
     main_image_url: Optional[str] = None
@@ -92,6 +99,22 @@ class YouTubeProcessResponseSchema(BaseModel):
 
 class ErrorResponseSchema(BaseModel):
     detail: str
+
+
+# --- Schemas for Async Job Processing ---
+
+class AsyncJobResponseSchema(BaseModel):
+    job_id: str
+    status: str
+    message: str
+
+class JobStatusResponseSchema(BaseModel):
+    job_id: str
+    status: str
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    created_at: str
+    updated_at: str
 
 
 # --- Schemas for Grocery Lists ---
