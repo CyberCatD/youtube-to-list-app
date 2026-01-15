@@ -1,6 +1,6 @@
 import logging
 import re
-import html
+import html as html_module
 from typing import Dict, Any, Optional
 from urllib.parse import urlparse
 import requests
@@ -72,9 +72,9 @@ def fetch_instagram_data(url: str) -> Dict[str, Any]:
         
         title = title_match.group(1) if title_match else "Instagram Recipe"
         description = desc_match.group(1) if desc_match else ""
-        image_url = html.unescape(image_match.group(1)) if image_match else None
+        image_url = html_module.unescape(image_match.group(1)) if image_match else None
         
-        caption = html.unescape(description)
+        caption = html_module.unescape(description)
         
         return {
             "platform": "instagram",
@@ -107,9 +107,9 @@ def fetch_tiktok_data(url: str) -> Dict[str, Any]:
         desc_match = re.search(r'<meta property="og:description" content="([^"]+)"', html)
         image_match = re.search(r'<meta property="og:image" content="([^"]+)"', html)
         
-        title = html.unescape(title_match.group(1)) if title_match else "TikTok Recipe"
-        description = html.unescape(desc_match.group(1)) if desc_match else ""
-        image_url = html.unescape(image_match.group(1)) if image_match else None
+        title = html_module.unescape(title_match.group(1)) if title_match else "TikTok Recipe"
+        description = html_module.unescape(desc_match.group(1)) if desc_match else ""
+        image_url = html_module.unescape(image_match.group(1)) if image_match else None
         
         return {
             "platform": "tiktok",
@@ -140,9 +140,9 @@ def fetch_facebook_data(url: str) -> Dict[str, Any]:
         desc_match = re.search(r'<meta property="og:description" content="([^"]+)"', page_html)
         image_match = re.search(r'<meta property="og:image" content="([^"]+)"', page_html)
         
-        title = html.unescape(title_match.group(1)) if title_match else "Facebook Recipe"
-        description = html.unescape(desc_match.group(1)) if desc_match else ""
-        image_url = html.unescape(image_match.group(1)) if image_match else None
+        title = html_module.unescape(title_match.group(1)) if title_match else "Facebook Recipe"
+        description = html_module.unescape(desc_match.group(1)) if desc_match else ""
+        image_url = html_module.unescape(image_match.group(1)) if image_match else None
         
         if not description and title:
             description = title
