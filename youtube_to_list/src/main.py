@@ -5,17 +5,16 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from prometheus_fastapi_instrumentator import Instrumentator
 import os
-import logging
 
-from .api.v1.endpoints import youtube, recipes, grocery_lists
+from .api.v1.endpoints import youtube, recipes, grocery_lists, admin
 from .database import engine, Base
 from .scheduler import start_scheduler
+from .logging_config import setup_logging, get_logger
 
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO"),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+setup_logging()
+logger = get_logger(__name__)
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -32,6 +31,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["monitoring"])
+
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/day", "50/hour"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -47,8 +48,10 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
+    logger.info("Starting YouTube to Recipe API", extra={"version": "1.0.0"})
     create_tables_on_startup()
     start_scheduler()
+    logger.info("Application startup complete")
 
 @app.get("/", tags=["root"])
 def root(request: Request):
@@ -219,5 +222,6 @@ def health_check():
 app.include_router(youtube.router, prefix="/api/v1/youtube", tags=["youtube"])
 app.include_router(recipes.router, prefix="/api/v1/recipes", tags=["recipes"])
 app.include_router(grocery_lists.router, prefix="/api/v1/grocery-lists", tags=["grocery-lists"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

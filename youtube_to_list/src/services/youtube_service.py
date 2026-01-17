@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-import logging
 from threading import Lock
 
 from googleapiclient.discovery import build
@@ -9,12 +8,14 @@ from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, Tran
 from dateutil import parser
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
 from cachetools import TTLCache, cached
+import logging
 
 from src.config import GOOGLE_API_KEY, YOUTUBE_API_KEY
+from src.logging_config import get_logger
 from typing import List
 from src.schemas import VideoMetadataSchema
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 metadata_cache = TTLCache(maxsize=100, ttl=3600)
 transcript_cache = TTLCache(maxsize=100, ttl=3600)

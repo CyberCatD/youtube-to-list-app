@@ -1,4 +1,3 @@
-import logging
 from typing import Dict, Any, Optional
 from urllib.parse import urlparse
 import requests
@@ -6,7 +5,9 @@ from recipe_scrapers import scrape_html
 from recipe_scrapers._exceptions import NoSchemaFoundInWildMode
 from bs4 import BeautifulSoup
 
-logger = logging.getLogger(__name__)
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

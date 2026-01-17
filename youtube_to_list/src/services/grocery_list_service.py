@@ -1,12 +1,12 @@
-import logging
 import re
 from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 from datetime import datetime
 
 from src.models import GroceryList, GroceryListItem, Recipe
+from src.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 REDUNDANT_PREFIXES = [
     "canned", "fresh", "frozen", "dried", "chopped", "diced", "minced",

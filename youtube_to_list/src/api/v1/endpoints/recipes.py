@@ -5,17 +5,17 @@ from typing import List, Optional
 from math import ceil
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-import logging
 
 from src.database import get_db
 from src.services import recipe_service, image_service, nutrition_service
 from src.schemas import RecipeSchema, RecipeListResponseSchema, PaginatedRecipeListResponseSchema, ErrorResponseSchema, RecipeUpdateSchema
 from src.auth import verify_api_key
 from src.models import Recipe
+from src.logging_config import get_logger
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @router.get("/", response_model=PaginatedRecipeListResponseSchema, responses={500: {"model": ErrorResponseSchema}})
 def list_recipes(

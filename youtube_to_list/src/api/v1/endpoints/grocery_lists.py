@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from typing import List
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-import logging
 
 from src.database import get_db
 from src.services import grocery_list_service
@@ -16,10 +15,11 @@ from src.schemas import (
     ErrorResponseSchema,
 )
 from src.auth import verify_api_key
+from src.logging_config import get_logger
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @router.get("/", response_model=List[GroceryListSchema])

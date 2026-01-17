@@ -2,13 +2,15 @@ import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable, DeadlineExceeded
 from src.config import GOOGLE_API_KEY, DEFAULT_RECIPE_LANGUAGE
 from src.schemas import VideoMetadataSchema, TagsSchema, LLMResponseSchema
+from src.logging_config import get_logger
+from src.services.llm_metrics import llm_metrics
 from pydantic import ValidationError
 from typing import Dict, Any, List, Optional
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
 import json
 import logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
@@ -153,6 +155,11 @@ def generate_content_and_tags(
         model = genai.GenerativeModel(MODEL_NAME)
         response = model.generate_content(prompt)
         
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            input_tokens = getattr(response.usage_metadata, 'prompt_token_count', 0)
+            output_tokens = getattr(response.usage_metadata, 'candidates_token_count', 0)
+            llm_metrics.track_call(MODEL_NAME, input_tokens, output_tokens)
+        
         cleaned_response_text = response.text.strip().replace('```json', '').replace('```', '').strip()
         
         response_data = json.loads(cleaned_response_text)
@@ -171,13 +178,15 @@ def generate_content_and_tags(
         
     except ValidationError as e:
         logger.error(f"LLM response validation failed: {e}")
+        llm_metrics.track_failed_call(MODEL_NAME, str(e))
         raise ValueError(f"Invalid LLM response structure: {e.error_count()} validation errors")
     except (json.JSONDecodeError, AttributeError) as e:
         logger.error(f"Error parsing LLM response: {e}")
+        llm_metrics.track_failed_call(MODEL_NAME, str(e))
         raise ValueError("Could not parse recipe data from video. The video might not contain a clear recipe.")
     except ValueError as ve:
-        # Re-raise ValueError (includes non-recipe detection)
         raise
     except Exception as e:
         logger.error(f"An unexpected error occurred with the Gemini API: {e}")
+        llm_metrics.track_failed_call(MODEL_NAME, str(e))
         raise RuntimeError("Failed to get a valid response from Gemini API.") from e

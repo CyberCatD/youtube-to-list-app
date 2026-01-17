@@ -5,7 +5,6 @@ from slowapi.util import get_remote_address
 from datetime import datetime
 from typing import Dict
 import uuid
-import logging
 
 from src.database import get_db, SessionLocal
 from src.services import recipe_service
@@ -18,12 +17,13 @@ from src.schemas import (
     AsyncJobResponseSchema,
     JobStatusResponseSchema
 )
+from src.logging_config import get_logger
 from src.validators import validate_youtube_url, sanitize_url
 from src.auth import verify_api_key
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 job_store: Dict[str, Dict] = {}
 

@@ -2,10 +2,12 @@ from sqlalchemy.orm import Session
 from src.models import Recipe, Ingredient, RecipeIngredient, Instruction, Tag
 from src.schemas import VideoMetadataSchema
 from src.services import youtube_service, llm_service, web_scraper_service, social_media_service
+from src.logging_config import get_logger
+from src.metrics import recipe_processing_time, recipes_imported, update_recipe_count
 from datetime import datetime
-import logging
+import time
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def _save_recipe_from_extracted_data(db: Session, source_url: str, llm_output: dict, fallback_name: str = "Untitled Recipe", fallback_image: str = None) -> Recipe:
     """
@@ -109,6 +111,8 @@ def upsert_recipe_from_youtube_url(db: Session, youtube_url: str) -> Recipe:
     Processes a YouTube URL to create or update a structured Recipe entry in the database.
     If a recipe with the given source_url already exists, it updates it.
     """
+    start_time = time.time()
+    status = "success"
     logger.info("Starting YouTube recipe upsert")
     try:
         video_id = youtube_service.extract_video_id(youtube_url)
@@ -149,19 +153,27 @@ def upsert_recipe_from_youtube_url(db: Session, youtube_url: str) -> Recipe:
         db.refresh(db_recipe)
         logger.info("Recipe object refreshed from DB")
         
+        recipes_imported.labels(source_type="youtube").inc()
         return db_recipe
         
     except Exception as e:
+        status = "failed"
         logger.error(f"An error occurred: {e}", exc_info=True)
         db.rollback()
         logger.info("Transaction rolled back")
         raise RuntimeError(f"Failed to process YouTube URL: {e}") from e
+    finally:
+        duration = time.time() - start_time
+        recipe_processing_time.labels(source_type="youtube", status=status).observe(duration)
+        logger.info(f"YouTube processing completed in {duration:.2f}s", extra={"duration": duration, "status": status})
 
 def upsert_recipe_from_web_url(db: Session, web_url: str) -> Recipe:
     """
     Processes a web URL (recipe websites like AllRecipes, NYTimes, etc.)
     to create or update a structured Recipe entry in the database.
     """
+    start_time = time.time()
+    status = "success"
     logger.info(f"Starting web recipe import from: {web_url}")
     try:
         extracted_data = web_scraper_service.extract_recipe_from_url(web_url)
@@ -182,26 +194,36 @@ def upsert_recipe_from_web_url(db: Session, web_url: str) -> Recipe:
         db.refresh(db_recipe)
         logger.info("Recipe object refreshed from DB")
         
+        recipes_imported.labels(source_type="web").inc()
         return db_recipe
         
     except ValueError as ve:
+        status = "failed"
         logger.error(f"Validation error: {ve}")
         db.rollback()
         raise
     except Exception as e:
+        status = "failed"
         logger.error(f"An error occurred: {e}", exc_info=True)
         db.rollback()
         logger.info("Transaction rolled back")
         raise RuntimeError(f"Failed to process web URL: {e}") from e
+    finally:
+        duration = time.time() - start_time
+        recipe_processing_time.labels(source_type="web", status=status).observe(duration)
+        logger.info(f"Web processing completed in {duration:.2f}s", extra={"duration": duration, "status": status})
 
 def upsert_recipe_from_social_url(db: Session, social_url: str) -> Recipe:
     """
     Processes an Instagram or TikTok URL to create or update a recipe.
     Extracts caption text and uses LLM to parse recipe data.
     """
+    start_time = time.time()
+    status = "success"
     logger.info(f"Starting social media recipe import from: {social_url}")
     try:
         extracted_data = social_media_service.extract_recipe_from_social_url(social_url)
+        source_type = extracted_data.get("source_type", "social")
         logger.info(f"Extracted recipe from social media: {extracted_data.get('recipe_details', {}).get('name')}")
         
         db_recipe = _save_recipe_from_extracted_data(
@@ -219,17 +241,24 @@ def upsert_recipe_from_social_url(db: Session, social_url: str) -> Recipe:
         db.refresh(db_recipe)
         logger.info("Recipe object refreshed from DB")
         
+        recipes_imported.labels(source_type=source_type).inc()
         return db_recipe
         
     except ValueError as ve:
+        status = "failed"
         logger.error(f"Validation error: {ve}")
         db.rollback()
         raise
     except Exception as e:
+        status = "failed"
         logger.error(f"An error occurred: {e}", exc_info=True)
         db.rollback()
         logger.info("Transaction rolled back")
         raise RuntimeError(f"Failed to process social media URL: {e}") from e
+    finally:
+        duration = time.time() - start_time
+        recipe_processing_time.labels(source_type="social", status=status).observe(duration)
+        logger.info(f"Social media processing completed in {duration:.2f}s", extra={"duration": duration, "status": status})
 
 def upsert_recipe_from_any_url(db: Session, url: str) -> Recipe:
     """

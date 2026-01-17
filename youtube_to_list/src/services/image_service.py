@@ -1,11 +1,12 @@
-import logging
 import os
 import uuid
 import requests
 from typing import Optional
 from urllib.parse import quote
 
-logger = logging.getLogger(__name__)
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 MICROLINK_API = "https://api.microlink.io/"
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")

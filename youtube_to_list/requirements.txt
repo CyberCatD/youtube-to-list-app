@@ -11,3 +11,5 @@ slowapi
 tenacity
 cachetools
 pydantic-settings
+python-json-logger
+prometheus-fastapi-instrumentator

@@ -1,11 +1,12 @@
-import logging
 import os
 import re
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
 import requests
 
-logger = logging.getLogger(__name__)
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 USDA_API_BASE = "https://api.nal.usda.gov/fdc/v1"
 USDA_API_KEY = os.getenv("USDA_API_KEY", "DEMO_KEY")

@@ -1,11 +1,11 @@
-import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 from src.database import SessionLocal
 from src.services import recipe_service
+from src.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 def purge_trash_job():
     """Scheduled job to purge trash every hour"""
