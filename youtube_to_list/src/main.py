@@ -12,6 +12,7 @@ from .api.v1.endpoints import youtube, recipes, grocery_lists, admin
 from .database import engine, Base
 from .scheduler import start_scheduler
 from .logging_config import setup_logging, get_logger
+from .config import settings
 
 setup_logging()
 logger = get_logger(__name__)
@@ -39,7 +40,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(","),
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "PATCH", "PUT"],
     allow_headers=["*"],

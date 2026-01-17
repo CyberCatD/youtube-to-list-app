@@ -1,6 +1,5 @@
 import logging
 import sys
-import os
 from pythonjsonlogger import jsonlogger
 
 
@@ -13,19 +12,25 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
             log_record['timestamp'] = self.formatTime(record)
 
 
-def setup_logging(level: str = None) -> logging.Logger:
+def setup_logging(level: str = None, environment: str = None) -> logging.Logger:
     """
     Configure structured JSON logging for the application.
     
     Args:
         level: Log level string (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-               Defaults to LOG_LEVEL env var or INFO.
+               Defaults to settings.log_level.
+        environment: Environment string (development, production).
+               Defaults to settings.environment.
     
     Returns:
         The root logger configured with JSON formatting.
     """
+    from src.config import settings
+    
     if level is None:
-        level = os.getenv("LOG_LEVEL", "INFO")
+        level = settings.log_level
+    if environment is None:
+        environment = settings.environment
     
     log_level = getattr(logging, level.upper(), logging.INFO)
     
@@ -38,7 +43,6 @@ def setup_logging(level: str = None) -> logging.Logger:
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(log_level)
     
-    environment = os.getenv("ENVIRONMENT", "development")
     if environment == "production":
         formatter = CustomJsonFormatter(
             '%(timestamp)s %(level)s %(logger)s %(message)s'

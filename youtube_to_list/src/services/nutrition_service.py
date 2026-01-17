@@ -1,15 +1,15 @@
-import os
 import re
 from typing import Dict, Any, Optional, List
 from urllib.parse import quote
 import requests
 
 from src.logging_config import get_logger
+from src.config import settings
 
 logger = get_logger(__name__)
 
 USDA_API_BASE = "https://api.nal.usda.gov/fdc/v1"
-USDA_API_KEY = os.getenv("USDA_API_KEY", "DEMO_KEY")
+USDA_API_KEY = settings.usda_api_key
 
 NUTRIENT_IDS = {
     "calories": 1008,

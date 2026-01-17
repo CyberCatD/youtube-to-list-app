@@ -4,10 +4,12 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 
+from src.config import settings
+
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "youtube_cards.db")
 DEFAULT_SQLITE_URL = f"sqlite:///{DB_PATH}"
 
-DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_SQLITE_URL)
+DATABASE_URL = settings.database_url if settings.database_url != "sqlite:///./youtube_cards.db" else DEFAULT_SQLITE_URL
 
 SQLALCHEMY_DATABASE_URL = DATABASE_URL
 
