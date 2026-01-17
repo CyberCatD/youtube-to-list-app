@@ -4,8 +4,9 @@ import RecipeGallery from './components/RecipeGallery';
 import RecipeDetail from './components/RecipeDetail';
 import GroceryLists from './components/GroceryLists';
 import GroceryListView from './components/GroceryList';
+import AdminDashboard from './components/AdminDashboard';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Home, UtensilsCrossed, ShoppingCart, Calendar, User, Menu, X, Moon, Sun } from 'lucide-react';
+import { Home, UtensilsCrossed, ShoppingCart, Calendar, Settings, Menu, X, Moon, Sun } from 'lucide-react';
 
 function App() {
   const location = useLocation();
@@ -79,6 +80,15 @@ function App() {
               <Calendar size={20} />
               Meal Plan
             </Link>
+            <Link 
+              to="/admin" 
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                isActive('/admin') ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Settings size={20} />
+              Admin
+            </Link>
             <button
               onClick={toggleDarkMode}
               className="p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -133,6 +143,14 @@ function App() {
               <Calendar size={20} />
               Meal Plan
             </Link>
+            <Link 
+              to="/admin" 
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-3 px-3 py-3 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Settings size={20} />
+              Admin
+            </Link>
           </div>
         )}
       </header>
@@ -145,6 +163,7 @@ function App() {
             <Route path="/recipe/:id" element={<RecipeDetail />} />
             <Route path="/grocery-lists" element={<GroceryLists />} />
             <Route path="/grocery-lists/:id" element={<GroceryListView />} />
+            <Route path="/admin" element={<AdminDashboard />} />
           </Routes>
         </ErrorBoundary>
       </main>
@@ -180,13 +199,13 @@ function App() {
             <span className="text-xs mt-1">Plan</span>
           </Link>
           <Link 
-            to="/profile" 
+            to="/admin" 
             className={`flex flex-col items-center px-4 py-2 rounded-lg ${
-              isActive('/profile') ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
+              isActive('/admin') ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
             }`}
           >
-            <User size={24} />
-            <span className="text-xs mt-1">Profile</span>
+            <Settings size={24} />
+            <span className="text-xs mt-1">Admin</span>
           </Link>
         </div>
       </nav>
